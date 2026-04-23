@@ -28,4 +28,17 @@ describe("estimateUkMonthlyPay", () => {
     expect(result.pensionMonthly).toBeCloseTo(291.6666666666667, 10);
     expect(result.netMonthly).toBeCloseTo(3971.45, 10);
   });
+
+  it("reduces the personal allowance for incomes in the taper range", () => {
+    const result = estimateUkMonthlyPay({
+      annualSalary: 110000,
+      pensionPercent: 5
+    });
+
+    expect(result.grossMonthly).toBeCloseTo(9166.666666666666, 10);
+    expect(result.incomeTaxMonthly).toBeCloseTo(2786, 10);
+    expect(result.nationalInsuranceMonthly).toBeCloseTo(350.8833333333333, 10);
+    expect(result.pensionMonthly).toBeCloseTo(458.3333333333333, 10);
+    expect(result.netMonthly).toBeCloseTo(5571.45, 10);
+  });
 });

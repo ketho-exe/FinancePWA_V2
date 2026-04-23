@@ -1,4 +1,5 @@
 const PERSONAL_ALLOWANCE = 12_570;
+const PERSONAL_ALLOWANCE_TAPER_THRESHOLD = 100_000;
 const BASIC_RATE_BAND = 37_700;
 const HIGHER_RATE_LIMIT = 125_140;
 const NI_PRIMARY_THRESHOLD = 12_570;
@@ -9,8 +10,21 @@ export interface EstimateUkMonthlyPayInput {
   pensionPercent: number;
 }
 
+function calculatePersonalAllowance(annualSalary: number) {
+  if (annualSalary <= PERSONAL_ALLOWANCE_TAPER_THRESHOLD) {
+    return PERSONAL_ALLOWANCE;
+  }
+
+  return Math.max(
+    PERSONAL_ALLOWANCE -
+      (annualSalary - PERSONAL_ALLOWANCE_TAPER_THRESHOLD) / 2,
+    0
+  );
+}
+
 function calculateIncomeTax(annualSalary: number) {
-  const taxableIncome = Math.max(annualSalary - PERSONAL_ALLOWANCE, 0);
+  const personalAllowance = calculatePersonalAllowance(annualSalary);
+  const taxableIncome = Math.max(annualSalary - personalAllowance, 0);
   const basicBandTaxable = Math.min(taxableIncome, BASIC_RATE_BAND);
   const higherBandTaxable = Math.min(
     Math.max(taxableIncome - BASIC_RATE_BAND, 0),
