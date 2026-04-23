@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-The app works immediately in preview mode and stores data in local browser storage so the UI can be reviewed before backend setup.
+After adding your Supabase environment variables, the app boots into email/password auth and loads your personal workspace from the database.
 
 ## Supabase setup
 
@@ -21,6 +21,6 @@ The app works immediately in preview mode and stores data in local browser stora
 
 ## Notes
 
-- Current build focuses on the product shell, page flows, and clean personal-finance UX from the supplied documents.
-- The workspace provider currently uses local preview data so the product is reviewable without blocking on auth or database wiring.
-- Supabase helpers and schema are included so you can connect persistence next without redesigning the app structure.
+- The app now requires Supabase auth and a configured database to run.
+- On first sign-in, it creates a single personal workspace and starter categories automatically.
+- All visible create/delete actions in the UI read from and write back to Supabase.

@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
-import { Pixelify_Sans } from "next/font/google";
+import { IBM_Plex_Sans, Pixelify_Sans } from "next/font/google";
 import "./globals.css";
 
-const pixelifySans = Pixelify_Sans({
-  variable: "--font-system",
+const bodyFont = IBM_Plex_Sans({
+  variable: "--font-body",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const displayFont = Pixelify_Sans({
+  variable: "--font-display",
   subsets: ["latin"],
   weight: ["400", "700"],
 });
@@ -19,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={pixelifySans.variable}>
+    <html lang="en" className={`${bodyFont.variable} ${displayFont.variable}`}>
       <body>{children}</body>
     </html>
   );

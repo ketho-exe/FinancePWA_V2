@@ -1,22 +1,23 @@
 "use client";
 
+import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import {
   createContext,
+  startTransition,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 import { ALLOCATION_PRESETS, buildAllocationReport } from "@/lib/allocation";
-import { demoSnapshot } from "@/lib/demo-data";
+import { EMPTY_SNAPSHOT, loadWorkspaceSnapshot } from "@/lib/finance-data";
 import { buildForecastSummary } from "@/lib/forecast";
 import { buildSubscriptionSummary } from "@/lib/subscriptions";
-import {
-  RecurringTransaction,
-  WorkspaceSnapshot,
-} from "@/lib/types";
-import { hasSupabaseConfig } from "@/lib/supabase";
-import { formatMonth, toMonthKey, uid } from "@/lib/utils";
+import { getSupabaseBrowserClientSingleton, hasSupabaseConfig } from "@/lib/supabase";
+import { type RecurringTransaction, type WorkspaceSnapshot } from "@/lib/types";
+import { formatMonth, toMonthKey } from "@/lib/utils";
 
 type SaveTransactionInput = {
   description: string;
@@ -59,62 +60,170 @@ type SaveAllocationRuleInput = {
   categoryIds: string[];
 };
 
+type AuthInput = {
+  email: string;
+  password: string;
+};
+
 type FinanceWorkspaceContextValue = WorkspaceSnapshot & {
   currentMonth: string;
-  mode: "demo" | "supabase-ready";
   ready: boolean;
+  isConfigured: boolean;
+  isAuthenticated: boolean;
+  authLoading: boolean;
+  workspaceLoading: boolean;
+  userEmail: string | null;
+  statusMessage: string | null;
+  errorMessage: string | null;
   summary: ReturnType<typeof buildForecastSummary>;
   allocationReport: ReturnType<typeof buildAllocationReport>;
   subscriptionSummary: ReturnType<typeof buildSubscriptionSummary>;
   monthlyIncome: number;
   monthlySpending: number;
-  saveTransaction: (input: SaveTransactionInput) => void;
-  saveBudget: (input: SaveBudgetInput) => void;
-  saveSavingsGoal: (input: SaveGoalInput) => void;
-  saveSubscription: (input: SaveSubscriptionInput) => void;
-  toggleRecurringPause: (id: string) => void;
-  saveWishlistItem: (input: SaveWishlistInput) => void;
-  saveAllocationRule: (input: SaveAllocationRuleInput) => void;
-  applyAllocationPreset: (preset: keyof typeof ALLOCATION_PRESETS) => void;
+  signIn: (input: AuthInput) => Promise<void>;
+  signUp: (input: AuthInput) => Promise<void>;
+  signOut: () => Promise<void>;
+  refreshWorkspace: () => Promise<void>;
+  saveTransaction: (input: SaveTransactionInput) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  saveBudget: (input: SaveBudgetInput) => Promise<void>;
+  deleteBudget: (id: string) => Promise<void>;
+  saveSavingsGoal: (input: SaveGoalInput) => Promise<void>;
+  deleteSavingsGoal: (id: string) => Promise<void>;
+  saveSubscription: (input: SaveSubscriptionInput) => Promise<void>;
+  toggleRecurringPause: (id: string) => Promise<void>;
+  deleteRecurringTransaction: (id: string) => Promise<void>;
+  saveWishlistItem: (input: SaveWishlistInput) => Promise<void>;
+  deleteWishlistItem: (id: string) => Promise<void>;
+  saveAllocationRule: (input: SaveAllocationRuleInput) => Promise<void>;
+  deleteAllocationRule: (id: string) => Promise<void>;
+  applyAllocationPreset: (preset: keyof typeof ALLOCATION_PRESETS) => Promise<void>;
 };
-
-const STORAGE_KEY = "finance-pwa-workspace";
 
 const FinanceWorkspaceContext = createContext<FinanceWorkspaceContextValue | null>(
   null,
 );
 
-function readStoredSnapshot() {
-  if (typeof window === "undefined") {
-    return demoSnapshot;
+function formatError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
   }
 
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return demoSnapshot;
+  if (typeof error === "object" && error && "message" in error) {
+    return String(error.message);
   }
 
-  try {
-    return JSON.parse(raw) as WorkspaceSnapshot;
-  } catch {
-    return demoSnapshot;
+  return "Something went wrong while talking to Supabase.";
+}
+
+function getClient() {
+  const client = getSupabaseBrowserClientSingleton();
+  if (!client) {
+    throw new Error("Supabase environment variables are missing.");
   }
+  return client;
+}
+
+async function requireWorkspaceContext(client: SupabaseClient, user: User) {
+  return loadWorkspaceSnapshot(client, user);
 }
 
 export function FinanceWorkspaceProvider({ children }: { children: ReactNode }) {
-  const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(() => readStoredSnapshot());
-  const currentMonth = toMonthKey(new Date("2026-04-23"));
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  }
+  const isConfigured = hasSupabaseConfig();
+  const [session, setSession] = useState<Session | null>(null);
+  const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(EMPTY_SNAPSHOT);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(isConfigured);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const currentMonth = toMonthKey(new Date());
+
+  const refreshWorkspace = useCallback(async () => {
+    if (!isConfigured) {
+      return;
+    }
+
+    const client = getClient();
+    const user = session?.user;
+    if (!user) {
+      startTransition(() => {
+        setSnapshot(EMPTY_SNAPSHOT);
+        setWorkspaceId(null);
+      });
+      return;
+    }
+
+    setWorkspaceLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const result = await requireWorkspaceContext(client, user);
+      startTransition(() => {
+        setSnapshot(result.snapshot);
+        setWorkspaceId(result.workspaceId);
+      });
+    } catch (error) {
+      setErrorMessage(formatError(error));
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }, [isConfigured, session?.user]);
+
+  useEffect(() => {
+    if (!isConfigured) return;
+
+    const client = getClient();
+    let isMounted = true;
+
+    void client.auth.getSession().then(({ data, error }) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        setErrorMessage(error.message);
+      } else {
+        setSession(data.session);
+      }
+
+      setAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange((_event, nextSession) => {
+      startTransition(() => {
+        setSession(nextSession);
+        setErrorMessage(null);
+        if (!nextSession) {
+          setSnapshot(EMPTY_SNAPSHOT);
+          setWorkspaceId(null);
+        }
+      });
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [isConfigured]);
+
+  useEffect(() => {
+    if (!isConfigured || authLoading || !session?.user) return;
+    void (async () => {
+      await refreshWorkspace();
+    })();
+  }, [authLoading, isConfigured, refreshWorkspace, session?.user]);
 
   const monthlyIncome = useMemo(
     () =>
       snapshot.transactions
         .filter((transaction) => toMonthKey(transaction.date) === currentMonth)
-        .filter((transaction) =>
-          snapshot.categories.find((category) => category.id === transaction.categoryId)?.kind ===
-          "income",
+        .filter(
+          (transaction) =>
+            snapshot.categories.find((category) => category.id === transaction.categoryId)?.kind ===
+            "income",
         )
         .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0),
     [currentMonth, snapshot.categories, snapshot.transactions],
@@ -124,9 +233,10 @@ export function FinanceWorkspaceProvider({ children }: { children: ReactNode }) 
     () =>
       snapshot.transactions
         .filter((transaction) => toMonthKey(transaction.date) === currentMonth)
-        .filter((transaction) =>
-          snapshot.categories.find((category) => category.id === transaction.categoryId)?.kind !==
-          "income",
+        .filter(
+          (transaction) =>
+            snapshot.categories.find((category) => category.id === transaction.categoryId)?.kind !==
+            "income",
         )
         .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0),
     [currentMonth, snapshot.categories, snapshot.transactions],
@@ -153,7 +263,13 @@ export function FinanceWorkspaceProvider({ children }: { children: ReactNode }) 
         categories: snapshot.categories,
         month: currentMonth,
       }),
-    [currentMonth, monthlyIncome, snapshot.allocationRules, snapshot.categories, snapshot.transactions],
+    [
+      currentMonth,
+      monthlyIncome,
+      snapshot.allocationRules,
+      snapshot.categories,
+      snapshot.transactions,
+    ],
   );
 
   const subscriptionSummary = useMemo(
@@ -161,145 +277,231 @@ export function FinanceWorkspaceProvider({ children }: { children: ReactNode }) 
     [snapshot.recurring],
   );
 
-  const value = useMemo<FinanceWorkspaceContextValue>(
-    () => ({
+  const withUserAction = useCallback(
+    async (action: (client: SupabaseClient, user: User) => Promise<void>) => {
+      const client = getClient();
+      const user = session?.user;
+
+      if (!user) {
+        throw new Error("You need to sign in first.");
+      }
+
+      setErrorMessage(null);
+      await action(client, user);
+      await refreshWorkspace();
+    },
+    [refreshWorkspace, session?.user],
+  );
+
+  const value: FinanceWorkspaceContextValue = {
       ...snapshot,
       currentMonth,
-      mode: hasSupabaseConfig() ? "supabase-ready" : "demo",
-      ready: true,
+      ready: !authLoading && (!isConfigured || !workspaceLoading),
+      isConfigured,
+      isAuthenticated: Boolean(session?.user),
+      authLoading,
+      workspaceLoading,
+      userEmail: session?.user.email ?? null,
+      statusMessage,
+      errorMessage,
       summary,
       allocationReport,
       subscriptionSummary,
       monthlyIncome,
       monthlySpending,
-      saveTransaction(input) {
-        setSnapshot((current) => ({
-          ...current,
-          transactions: [
+      async signIn(input) {
+        const client = getClient();
+        setErrorMessage(null);
+        setStatusMessage(null);
+        const { error } = await client.auth.signInWithPassword(input);
+        if (error) {
+          setErrorMessage(error.message);
+          return;
+        }
+        setStatusMessage("Signed in.");
+      },
+      async signUp(input) {
+        const client = getClient();
+        setErrorMessage(null);
+        setStatusMessage(null);
+        const { data, error } = await client.auth.signUp(input);
+        if (error) {
+          setErrorMessage(error.message);
+          return;
+        }
+        if (!data.session) {
+          setStatusMessage("Account created. Check your email to confirm your sign-in.");
+          return;
+        }
+        setStatusMessage("Account created and signed in.");
+      },
+      async signOut() {
+        const client = getClient();
+        await client.auth.signOut();
+        setStatusMessage("Signed out.");
+      },
+      refreshWorkspace,
+      async saveTransaction(input) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId = workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const { error } = await client.from("transactions").insert({
+            workspace_id: activeWorkspaceId,
+            category_id: input.categoryId,
+            description: input.description,
+            amount: input.amount,
+            transaction_date: input.date,
+            notes: input.notes ?? null,
+          });
+          if (error) throw error;
+        });
+      },
+      async deleteTransaction(id) {
+        await withUserAction(async (client) => {
+          const { error } = await client.from("transactions").delete().eq("id", id);
+          if (error) throw error;
+        });
+      },
+      async saveBudget(input) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId = workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const { error } = await client.from("budgets").upsert(
             {
-              id: uid("txn"),
-              description: input.description,
+              workspace_id: activeWorkspaceId,
+              category_id: input.categoryId,
+              month_key: input.month,
               amount: input.amount,
-              date: input.date,
-              categoryId: input.categoryId,
-              notes: input.notes,
             },
-            ...current.transactions,
-          ],
-        }));
+            { onConflict: "workspace_id,category_id,month_key" },
+          );
+          if (error) throw error;
+        });
       },
-      saveBudget(input) {
-        setSnapshot((current) => ({
-          ...current,
-          budgets: [
-            ...current.budgets.filter(
-              (budget) =>
-                !(budget.categoryId === input.categoryId && budget.month === input.month),
-            ),
-            { id: uid("bud"), ...input },
-          ],
-        }));
+      async deleteBudget(id) {
+        await withUserAction(async (client) => {
+          const { error } = await client.from("budgets").delete().eq("id", id);
+          if (error) throw error;
+        });
       },
-      saveSavingsGoal(input) {
-        setSnapshot((current) => ({
-          ...current,
-          savingsGoals: [
-            ...current.savingsGoals,
-            {
-              id: uid("goal"),
-              name: input.name,
-              targetAmount: input.targetAmount,
-              currentAmount: input.currentAmount ?? 0,
-            },
-          ],
-        }));
+      async saveSavingsGoal(input) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId = workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const { error } = await client.from("savings_goals").insert({
+            workspace_id: activeWorkspaceId,
+            name: input.name,
+            target_amount: input.targetAmount,
+            current_amount: input.currentAmount ?? 0,
+          });
+          if (error) throw error;
+        });
       },
-      saveSubscription(input) {
-        setSnapshot((current) => ({
-          ...current,
-          recurring: [
-            {
-              id: uid("sub"),
-              name: input.name,
-              amount: input.amount,
-              categoryId: input.categoryId,
-              billingCycle: input.billingCycle,
-              nextRunDate: input.nextRunDate,
-              providerName: input.providerName,
-              trialEndDate: input.trialEndDate,
-              isSubscription: true,
-            },
-            ...current.recurring,
-          ],
-        }));
+      async deleteSavingsGoal(id) {
+        await withUserAction(async (client) => {
+          const { error } = await client.from("savings_goals").delete().eq("id", id);
+          if (error) throw error;
+        });
       },
-      toggleRecurringPause(id) {
-        setSnapshot((current) => ({
-          ...current,
-          recurring: current.recurring.map((item) =>
-            item.id === id ? { ...item, isPaused: !item.isPaused } : item,
-          ),
-        }));
+      async saveSubscription(input) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId = workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const { error } = await client.from("recurring_transactions").insert({
+            workspace_id: activeWorkspaceId,
+            category_id: input.categoryId,
+            name: input.name,
+            amount: input.amount,
+            billing_cycle: input.billingCycle,
+            next_run_date: input.nextRunDate,
+            provider_name: input.providerName ?? null,
+            trial_end_date: input.trialEndDate ?? null,
+            is_subscription: true,
+            is_paused: false,
+          });
+          if (error) throw error;
+        });
       },
-      saveWishlistItem(input) {
-        setSnapshot((current) => ({
-          ...current,
-          wishlist: [
-            ...current.wishlist,
-            {
-              id: uid("wish"),
-              name: input.name,
-              estimatedCost: input.estimatedCost,
-              priority: current.wishlist.length + 1,
-            },
-          ],
-        }));
+      async toggleRecurringPause(id) {
+        await withUserAction(async (client) => {
+          const current = snapshot.recurring.find((item) => item.id === id);
+          const { error } = await client
+            .from("recurring_transactions")
+            .update({ is_paused: !current?.isPaused })
+            .eq("id", id);
+          if (error) throw error;
+        });
       },
-      saveAllocationRule(input) {
-        setSnapshot((current) => ({
-          ...current,
-          allocationRules: [
-            ...current.allocationRules,
-            {
-              id: uid("alloc"),
-              name: input.name,
-              percentage: input.percentage,
-              categoryIds: input.categoryIds,
-            },
-          ],
-        }));
+      async deleteRecurringTransaction(id) {
+        await withUserAction(async (client) => {
+          const { error } = await client.from("recurring_transactions").delete().eq("id", id);
+          if (error) throw error;
+        });
       },
-      applyAllocationPreset(preset) {
-        setSnapshot((current) => ({
-          ...current,
-          allocationRules: ALLOCATION_PRESETS[preset].map((rule, index) => {
-            const matchingCategory =
-              index === 2
-                ? current.categories.filter((category) => category.kind === "savings")
-                : current.categories.filter((category) => category.kind === "expense");
-            return {
-              id: uid("alloc"),
+      async saveWishlistItem(input) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId = workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const nextPriority =
+            snapshot.wishlist.reduce((max, item) => Math.max(max, item.priority), 0) + 1;
+          const { error } = await client.from("wishlist_items").insert({
+            workspace_id: activeWorkspaceId,
+            name: input.name,
+            estimated_cost: input.estimatedCost,
+            priority: nextPriority,
+          });
+          if (error) throw error;
+        });
+      },
+      async deleteWishlistItem(id) {
+        await withUserAction(async (client) => {
+          const { error } = await client.from("wishlist_items").delete().eq("id", id);
+          if (error) throw error;
+        });
+      },
+      async saveAllocationRule(input) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId = workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const { error } = await client.from("allocation_rules").insert({
+            workspace_id: activeWorkspaceId,
+            name: input.name,
+            percentage: input.percentage,
+            category_ids: input.categoryIds,
+            sort_order: snapshot.allocationRules.length,
+          });
+          if (error) throw error;
+        });
+      },
+      async deleteAllocationRule(id) {
+        await withUserAction(async (client) => {
+          const { error } = await client.from("allocation_rules").delete().eq("id", id);
+          if (error) throw error;
+        });
+      },
+      async applyAllocationPreset(preset) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId = workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const expenseCategories = snapshot.categories
+            .filter((category) => category.kind === "expense")
+            .map((category) => category.id);
+          const savingsCategories = snapshot.categories
+            .filter((category) => category.kind === "savings")
+            .map((category) => category.id);
+
+          const { error: deleteError } = await client
+            .from("allocation_rules")
+            .delete()
+            .eq("workspace_id", activeWorkspaceId);
+          if (deleteError) throw deleteError;
+
+          const { error: insertError } = await client.from("allocation_rules").insert(
+            ALLOCATION_PRESETS[preset].map((rule, index) => ({
+              workspace_id: activeWorkspaceId,
               name: rule.name,
               percentage: rule.percentage,
-              categoryIds: matchingCategory.map((category) => category.id).slice(
-                0,
-                index === 0 ? 3 : index === 1 ? 2 : 2,
-              ),
-            };
-          }),
-        }));
+              category_ids: index === 2 ? savingsCategories : expenseCategories,
+              sort_order: index,
+            })),
+          );
+          if (insertError) throw insertError;
+        });
       },
-    }),
-    [
-      allocationReport,
-      currentMonth,
-      monthlyIncome,
-      monthlySpending,
-      snapshot,
-      subscriptionSummary,
-      summary,
-    ],
-  );
+    };
 
   return (
     <FinanceWorkspaceContext.Provider value={value}>
@@ -322,7 +524,7 @@ export function useCurrentUserSalarySummary() {
     grossIncome: monthlyIncome,
     spending: monthlySpending,
     remaining: monthlyIncome - monthlySpending,
-    payPeriodLabel: formatMonth(new Date("2026-04-23")),
+    payPeriodLabel: formatMonth(new Date()),
   };
 }
 

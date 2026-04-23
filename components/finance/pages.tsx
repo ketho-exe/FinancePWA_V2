@@ -109,7 +109,7 @@ export function DashboardPage() {
 }
 
 export function TransactionsPage() {
-  const { categories, transactions, saveTransaction } = useFinanceWorkspace();
+  const { categories, transactions, saveTransaction, deleteTransaction } = useFinanceWorkspace();
   const [draft, setDraft] = useState({
     description: "",
     amount: "",
@@ -119,7 +119,7 @@ export function TransactionsPage() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    saveTransaction({
+    void saveTransaction({
       description: draft.description,
       amount: Number(draft.amount),
       categoryId: draft.categoryId,
@@ -144,12 +144,19 @@ export function TransactionsPage() {
         </form>
       </AppGroupBox>
       <DataTable
-        headers={["Date", "Description", "Category", "Amount"]}
+        headers={["Date", "Description", "Category", "Amount", "Actions"]}
         rows={transactions.map((transaction) => [
           transaction.date,
           transaction.description,
           categoryName(transaction.categoryId, categories),
           formatCurrency(transaction.amount),
+          <AppButton
+            key={`delete-${transaction.id}`}
+            variant="danger"
+            onClick={() => void deleteTransaction(transaction.id)}
+          >
+            Delete
+          </AppButton>,
         ])}
       />
     </AppWindow>
@@ -157,7 +164,7 @@ export function TransactionsPage() {
 }
 
 export function BudgetsPage() {
-  const { budgets, categories, currentMonth, saveBudget } = useFinanceWorkspace();
+  const { budgets, categories, currentMonth, saveBudget, deleteBudget } = useFinanceWorkspace();
   const expenseCategories = categories.filter((category) => category.kind !== "income");
   const [categoryId, setCategoryId] = useState(expenseCategories[0]?.id ?? "");
   const [amount, setAmount] = useState("");
@@ -176,7 +183,7 @@ export function BudgetsPage() {
             variant="primary"
             onClick={() => {
               if (!amount) return;
-              saveBudget({ categoryId, amount: Number(amount), month: currentMonth });
+              void saveBudget({ categoryId, amount: Number(amount), month: currentMonth });
               setAmount("");
             }}
           >
@@ -189,7 +196,12 @@ export function BudgetsPage() {
           .filter((budget) => budget.month === currentMonth)
           .map((budget) => (
             <AppCard key={budget.id}>
-              <strong>{categoryName(budget.categoryId, categories)}</strong>
+              <div className="row-between">
+                <strong>{categoryName(budget.categoryId, categories)}</strong>
+                <AppButton variant="danger" onClick={() => void deleteBudget(budget.id)}>
+                  Delete
+                </AppButton>
+              </div>
               <p>{formatCurrency(budget.amount)}</p>
             </AppCard>
           ))}
@@ -199,7 +211,7 @@ export function BudgetsPage() {
 }
 
 export function SavingsPage() {
-  const { savingsGoals, saveSavingsGoal } = useFinanceWorkspace();
+  const { savingsGoals, saveSavingsGoal, deleteSavingsGoal } = useFinanceWorkspace();
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
 
@@ -213,7 +225,7 @@ export function SavingsPage() {
             variant="primary"
             onClick={() => {
               if (!name || !targetAmount) return;
-              saveSavingsGoal({ name, targetAmount: Number(targetAmount) });
+              void saveSavingsGoal({ name, targetAmount: Number(targetAmount) });
               setName("");
               setTargetAmount("");
             }}
@@ -225,6 +237,12 @@ export function SavingsPage() {
       <div className="two-column">
         {savingsGoals.map((goal) => (
           <AppWindow key={goal.id} title={goal.name} icon="◆" statusText={goal.targetDate ? `Target ${goal.targetDate}` : "No target date"}>
+            <div className="toolbar-row">
+              <div />
+              <AppButton variant="danger" onClick={() => void deleteSavingsGoal(goal.id)}>
+                Delete Goal
+              </AppButton>
+            </div>
             <p className="card-stat">{formatCurrency(goal.currentAmount)} saved</p>
             <ProgressBar value={goal.currentAmount} max={goal.targetAmount} />
           </AppWindow>
@@ -235,7 +253,7 @@ export function SavingsPage() {
 }
 
 export function WishlistPage() {
-  const { wishlist, saveWishlistItem } = useFinanceWorkspace();
+  const { wishlist, saveWishlistItem, deleteWishlistItem } = useFinanceWorkspace();
   const [name, setName] = useState("");
   const [estimatedCost, setEstimatedCost] = useState("");
 
@@ -249,7 +267,7 @@ export function WishlistPage() {
             variant="primary"
             onClick={() => {
               if (!name || !estimatedCost) return;
-              saveWishlistItem({ name, estimatedCost: Number(estimatedCost) });
+              void saveWishlistItem({ name, estimatedCost: Number(estimatedCost) });
               setName("");
               setEstimatedCost("");
             }}
@@ -265,7 +283,12 @@ export function WishlistPage() {
             <AppPanel key={item.id}>
               <div className="row-between">
                 <strong>{item.priority}. {item.name}</strong>
-                <span>{formatCurrency(item.estimatedCost)}</span>
+                <div className="toolbar-row">
+                  <span>{formatCurrency(item.estimatedCost)}</span>
+                  <AppButton variant="danger" onClick={() => void deleteWishlistItem(item.id)}>
+                    Delete
+                  </AppButton>
+                </div>
               </div>
             </AppPanel>
           ))}
@@ -304,7 +327,14 @@ export function ForecastPage() {
 }
 
 export function AllocationsPage() {
-  const { categories, allocationRules, monthlyIncome, saveAllocationRule, applyAllocationPreset } = useFinanceWorkspace();
+  const {
+    categories,
+    allocationRules,
+    monthlyIncome,
+    saveAllocationRule,
+    deleteAllocationRule,
+    applyAllocationPreset,
+  } = useFinanceWorkspace();
   const allocationReport = useAllocationSummary();
   const [name, setName] = useState("");
   const [percentage, setPercentage] = useState("");
@@ -314,8 +344,8 @@ export function AllocationsPage() {
   return (
     <AppWindow title="Allocations" icon="🧮" statusText={`Allocation total ${totalPercentage}%`}>
       <div className="toolbar-row">
-        <AppButton onClick={() => applyAllocationPreset("50-30-20")}>Apply 50/30/20</AppButton>
-        <AppButton onClick={() => applyAllocationPreset("70-20-10")}>Apply 70/20/10</AppButton>
+        <AppButton onClick={() => void applyAllocationPreset("50-30-20")}>Apply 50/30/20</AppButton>
+        <AppButton onClick={() => void applyAllocationPreset("70-20-10")}>Apply 70/20/10</AppButton>
         <MetricCard label="Unallocated" value={formatCurrency(getUnallocatedAmount(monthlyIncome, allocationRules))} />
       </div>
       <AppGroupBox label="Create Rule">
@@ -326,7 +356,11 @@ export function AllocationsPage() {
             variant="primary"
             onClick={() => {
               if (!name || !percentage) return;
-              saveAllocationRule({ name, percentage: Number(percentage), categoryIds: expenseCategoryIds });
+              void saveAllocationRule({
+                name,
+                percentage: Number(percentage),
+                categoryIds: expenseCategoryIds,
+              });
               setName("");
               setPercentage("");
             }}
@@ -340,7 +374,12 @@ export function AllocationsPage() {
           <AppCard key={entry.rule.id}>
             <div className="row-between">
               <strong>{entry.rule.name}</strong>
-              <StatusBadge status={entry.health} />
+              <div className="toolbar-row">
+                <StatusBadge status={entry.health} />
+                <AppButton variant="danger" onClick={() => void deleteAllocationRule(entry.rule.id)}>
+                  Delete
+                </AppButton>
+              </div>
             </div>
             <p>Target {formatCurrency(entry.targetAmount)}</p>
             <p>Actual {formatCurrency(entry.actualAmount)}</p>
@@ -357,7 +396,13 @@ export function AllocationsPage() {
 }
 
 export function SubscriptionsPage() {
-  const { categories, recurring, toggleRecurringPause, saveSubscription } = useFinanceWorkspace();
+  const {
+    categories,
+    recurring,
+    toggleRecurringPause,
+    deleteRecurringTransaction,
+    saveSubscription,
+  } = useFinanceWorkspace();
   const subscriptionSummary = useSubscriptionSummary();
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -388,7 +433,7 @@ export function SubscriptionsPage() {
             variant="primary"
             onClick={() => {
               if (!name || !amount) return;
-              saveSubscription({
+              void saveSubscription({
                 name,
                 amount: Number(amount),
                 categoryId,
@@ -414,8 +459,11 @@ export function SubscriptionsPage() {
               </div>
               <div className="toolbar-row">
                 <StatusBadge status={item.isPaused ? "paused" : item.trialEndDate ? "trial" : "active"} />
-                <AppButton onClick={() => toggleRecurringPause(item.id)}>
+                <AppButton onClick={() => void toggleRecurringPause(item.id)}>
                   {item.isPaused ? "Resume" : "Pause"}
+                </AppButton>
+                <AppButton variant="danger" onClick={() => void deleteRecurringTransaction(item.id)}>
+                  Delete
                 </AppButton>
               </div>
             </div>
@@ -427,7 +475,7 @@ export function SubscriptionsPage() {
 }
 
 export function SettingsPage() {
-  const { categories, currentMonth } = useFinanceWorkspace();
+  const { categories, currentMonth, signOut } = useFinanceWorkspace();
   const salarySummary = useCurrentUserSalarySummary();
 
   return (
@@ -442,7 +490,7 @@ export function SettingsPage() {
           </div>
         </AppCard>
         <AppCard>
-          <SectionHeading title="Category Setup" subtitle="Starter taxonomy" />
+          <SectionHeading title="Category Setup" subtitle="Starter taxonomy" action={<AppButton onClick={() => void signOut()}>Sign out</AppButton>} />
           <div className="tag-cloud">
             {categories.map((category) => (
               <span key={category.id} className="tag-pill">{category.name}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { FormEvent, ReactNode, useState } from "react";
 import { FinanceWorkspaceProvider, useFinanceWorkspace } from "@/hooks/use-finance-workspace";
 import { AppButton, AppCard, FinanceNav } from "@/components/finance/ui";
 
@@ -15,8 +15,20 @@ export function FinanceAppBoundary({ children }: { children: ReactNode }) {
 export function FinanceAppContent({ children }: { children: ReactNode }) {
   const workspace = useFinanceWorkspace();
 
-  if (!workspace.ready) {
-    return <LoadingScreen label="Loading finance workspace" detail="Preparing your desktop." />;
+  if (!workspace.isConfigured) {
+    return <ConfigScreen />;
+  }
+
+  if (workspace.authLoading) {
+    return <LoadingScreen label="Checking your session" detail="Connecting to Supabase auth." />;
+  }
+
+  if (!workspace.isAuthenticated) {
+    return <AuthScreen />;
+  }
+
+  if (workspace.workspaceLoading || !workspace.ready) {
+    return <LoadingScreen label="Loading your workspace" detail="Fetching your live finance data." />;
   }
 
   return (
@@ -24,21 +36,21 @@ export function FinanceAppContent({ children }: { children: ReactNode }) {
       <header className="desktop-header">
         <div className="desktop-header__title">FinancePWA</div>
         <div className="desktop-header__meta">
-          <span>{workspace.mode === "demo" ? "Preview mode" : "Supabase configured"}</span>
-          <span>Last synced 2 mins ago</span>
+          <span>{workspace.userEmail}</span>
+          <span>Supabase connected</span>
         </div>
       </header>
       <FinanceNav />
-      {workspace.mode === "demo" ? (
+      {workspace.errorMessage ? (
         <AppCard className="notice-bar">
-          <strong>Preview mode:</strong> the app is fully reviewable now and will persist to
-          local browser storage until you add Supabase env vars and run the schema.
+          <strong>Problem:</strong> {workspace.errorMessage}
         </AppCard>
       ) : null}
+      {workspace.statusMessage ? <AppCard className="notice-bar">{workspace.statusMessage}</AppCard> : null}
       <main className="finance-main">{children}</main>
       <footer className="desktop-status">
-        <span>FinancePWA local build</span>
-        <span>{workspace.mode === "demo" ? "Demo storage active" : "Supabase env detected"}</span>
+        <span>FinancePWA live workspace</span>
+        <span>{workspace.categories.length} categories loaded</span>
       </footer>
     </div>
   );
@@ -66,7 +78,7 @@ export function ConfigScreen() {
     <div className="center-screen">
       <AppCard className="loading-card">
         <strong>Supabase configuration missing</strong>
-        <p>Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to switch off preview mode.</p>
+        <p>Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to boot the app.</p>
       </AppCard>
     </div>
   );
@@ -83,6 +95,67 @@ export function DataErrorScreen({
         <strong>Workspace error</strong>
         <p>{message}</p>
         <AppButton>Retry</AppButton>
+      </AppCard>
+    </div>
+  );
+}
+
+export function AuthScreen() {
+  const { signIn, signUp, errorMessage, statusMessage } = useFinanceWorkspace();
+  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      if (mode === "sign-in") {
+        await signIn({ email, password });
+      } else {
+        await signUp({ email, password });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="center-screen">
+      <AppCard className="auth-card">
+        <strong>{mode === "sign-in" ? "Sign in" : "Create account"}</strong>
+        <p>Use your Supabase auth credentials to open your personal workspace.</p>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+          <AppButton type="submit" variant="primary" disabled={busy}>
+            {busy ? "Please wait..." : mode === "sign-in" ? "Sign in" : "Create account"}
+          </AppButton>
+        </form>
+        <div className="auth-actions">
+          <button
+            className="link-button"
+            type="button"
+            onClick={() => setMode(mode === "sign-in" ? "sign-up" : "sign-in")}
+          >
+            {mode === "sign-in" ? "Need an account? Create one." : "Already registered? Sign in."}
+          </button>
+        </div>
+        {errorMessage ? <p className="auth-error">{errorMessage}</p> : null}
+        {statusMessage ? <p className="auth-status">{statusMessage}</p> : null}
       </AppCard>
     </div>
   );

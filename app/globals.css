@@ -12,7 +12,8 @@
   --color-warning: #aa6600;
   --color-text: #000000;
   --color-text-muted: #444444;
-  --font-system: "Pixelify Sans", "MS Sans Serif", "Segoe UI", Tahoma, sans-serif;
+  --font-body: "IBM Plex Sans", "MS Sans Serif", "Segoe UI", Tahoma, sans-serif;
+  --font-display: "Pixelify Sans", "MS Sans Serif", "Segoe UI", Tahoma, sans-serif;
 }
 
 html {
@@ -31,7 +32,9 @@ body {
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 20%),
     linear-gradient(180deg, #0a7d7d 0%, var(--color-canvas) 45%, #005f5f 100%);
-  font-family: var(--font-system);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -52,6 +55,10 @@ select,
 textarea,
 button {
   font: inherit;
+}
+
+button {
+  cursor: pointer;
 }
 
 input,
@@ -98,8 +105,10 @@ textarea {
 }
 
 .desktop-header__title {
+  font-family: var(--font-display);
   font-size: 20px;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .desktop-header__meta,
@@ -128,6 +137,8 @@ textarea {
   min-height: 40px;
   padding: 8px 14px;
   background: var(--color-silver);
+  font-size: 14px;
+  font-weight: 600;
   border-top: 2px solid var(--color-silver-light);
   border-left: 2px solid var(--color-silver-light);
   border-right: 2px solid var(--color-silver-dark);
@@ -198,6 +209,8 @@ textarea {
   padding: 8px 10px;
   background: var(--color-titlebar);
   color: var(--color-titlebar-fg);
+  font-family: var(--font-display);
+  font-size: 15px;
 }
 
 .app-window__title,
@@ -276,12 +289,12 @@ textarea {
 .metric-card__label,
 .metric-card__hint,
 .muted-text {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--color-text-muted);
 }
 
 .metric-card__value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
 }
 
@@ -308,7 +321,7 @@ textarea {
 
 .section-heading p {
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .list-stack,
@@ -388,7 +401,7 @@ textarea {
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -423,6 +436,7 @@ textarea {
 .data-table td {
   padding: 10px 12px;
   text-align: left;
+  font-size: 14px;
   border-bottom: 1px solid #d7d7d7;
 }
 
@@ -452,6 +466,38 @@ textarea {
 .card-stat {
   font-size: 24px;
   font-weight: 700;
+}
+
+.auth-card {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 14px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.link-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-titlebar);
+  text-decoration: underline;
+}
+
+.auth-error {
+  color: var(--color-danger);
+}
+
+.auth-status {
+  color: var(--color-success);
 }
 
 @media (max-width: 960px) {

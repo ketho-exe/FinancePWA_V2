@@ -9,7 +9,7 @@ create table if not exists public.profiles (
 
 create table if not exists public.workspaces (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references public.profiles (id) on delete cascade,
+  owner_id uuid not null unique references public.profiles (id) on delete cascade,
   name text not null default 'Personal Workspace',
   created_at timestamptz not null default now()
 );
@@ -98,6 +98,16 @@ alter table public.savings_goals enable row level security;
 alter table public.wishlist_items enable row level security;
 alter table public.recurring_transactions enable row level security;
 alter table public.allocation_rules enable row level security;
+
+drop policy if exists "profiles self access" on public.profiles;
+drop policy if exists "workspaces owner access" on public.workspaces;
+drop policy if exists "categories owner access" on public.categories;
+drop policy if exists "transactions owner access" on public.transactions;
+drop policy if exists "budgets owner access" on public.budgets;
+drop policy if exists "savings goals owner access" on public.savings_goals;
+drop policy if exists "wishlist owner access" on public.wishlist_items;
+drop policy if exists "recurring owner access" on public.recurring_transactions;
+drop policy if exists "allocations owner access" on public.allocation_rules;
 
 create or replace function public.workspace_ids_for_user(user_id uuid)
 returns setof uuid

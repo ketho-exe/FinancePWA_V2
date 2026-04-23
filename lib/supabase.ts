@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export function hasSupabaseConfig() {
   return Boolean(
@@ -16,4 +16,18 @@ export function getSupabaseBrowserClient() {
   }
 
   return createClient(url, anonKey);
+}
+
+let browserClient: SupabaseClient | null = null;
+
+export function getSupabaseBrowserClientSingleton() {
+  if (!hasSupabaseConfig()) {
+    return null;
+  }
+
+  if (!browserClient) {
+    browserClient = getSupabaseBrowserClient();
+  }
+
+  return browserClient;
 }
