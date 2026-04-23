@@ -21,13 +21,13 @@ describe("Supabase schema migrations", () => {
       /create table public\.transactions[\s\S]*foreign key \(user_id, category_id\)[\s\S]*references public\.categories \(user_id, id\)/i
     );
     expect(schemaSql).toMatch(
-      /create table public\.transactions[\s\S]*foreign key \(user_id, category_id\)[\s\S]*references public\.categories \(user_id, id\)[\s\S]*on delete set null/i
+      /create table public\.transactions[\s\S]*foreign key \(user_id, category_id\)[\s\S]*references public\.categories \(user_id, id\)[\s\S]*on delete set null \(category_id\)/i
     );
     expect(schemaSql).toMatch(
       /create table public\.recurring_items[\s\S]*foreign key \(user_id, category_id\)[\s\S]*references public\.categories \(user_id, id\)/i
     );
     expect(schemaSql).toMatch(
-      /create table public\.recurring_items[\s\S]*foreign key \(user_id, category_id\)[\s\S]*references public\.categories \(user_id, id\)[\s\S]*on delete set null/i
+      /create table public\.recurring_items[\s\S]*foreign key \(user_id, category_id\)[\s\S]*references public\.categories \(user_id, id\)[\s\S]*on delete set null \(category_id\)/i
     );
   });
 

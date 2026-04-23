@@ -84,7 +84,7 @@ create table public.transactions (
     on delete cascade,
   foreign key (user_id, category_id)
     references public.categories (user_id, id)
-    on delete set null
+    on delete set null (category_id)
 );
 
 create table public.recurring_items (
@@ -100,7 +100,7 @@ create table public.recurring_items (
   updated_at timestamptz not null default now(),
   foreign key (user_id, category_id)
     references public.categories (user_id, id)
-    on delete set null
+    on delete set null (category_id)
 );
 
 create table public.pots (
