@@ -1,5 +1,13 @@
-import { describe, it } from "vitest";
+import { expect, test } from "@playwright/test";
 
-describe.skip("auth routes", () => {
-  it("redirects unauthenticated protected routes to login");
+test("redirects unauthenticated users from dashboard to login", async ({
+  page,
+  baseURL
+}) => {
+  const appUrl = baseURL ?? "http://127.0.0.1:3000";
+
+  await page.goto(`${appUrl}/dashboard`);
+
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("main")).toContainText("Login");
 });
