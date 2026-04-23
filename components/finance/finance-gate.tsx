@@ -33,25 +33,29 @@ export function FinanceAppContent({ children }: { children: ReactNode }) {
 
   return (
     <div className="finance-shell">
-      <header className="desktop-header">
-        <div className="desktop-header__title">FinancePWA</div>
-        <div className="desktop-header__meta">
-          <span>{workspace.userEmail}</span>
-          <span>Supabase connected</span>
-        </div>
-      </header>
       <FinanceNav />
-      {workspace.errorMessage ? (
-        <AppCard className="notice-bar">
-          <strong>Problem:</strong> {workspace.errorMessage}
-        </AppCard>
-      ) : null}
-      {workspace.statusMessage ? <AppCard className="notice-bar">{workspace.statusMessage}</AppCard> : null}
-      <main className="finance-main">{children}</main>
-      <footer className="desktop-status">
-        <span>FinancePWA live workspace</span>
-        <span>{workspace.categories.length} categories loaded</span>
-      </footer>
+      <div className="finance-content">
+        <header className="desktop-header">
+          <div>
+            <div className="desktop-header__eyebrow">Overview</div>
+            <div className="desktop-header__title">Your money, organised</div>
+          </div>
+          <div className="desktop-header__tools">
+            <div className="top-search">Search transactions, bills, goals</div>
+            <div className="desktop-header__meta">
+              <span>{workspace.userEmail}</span>
+              <span>Supabase connected</span>
+            </div>
+          </div>
+        </header>
+        {workspace.errorMessage ? (
+          <AppCard className="notice-bar">
+            <strong>Problem:</strong> {workspace.errorMessage}
+          </AppCard>
+        ) : null}
+        {workspace.statusMessage ? <AppCard className="notice-bar">{workspace.statusMessage}</AppCard> : null}
+        <main className="finance-main">{children}</main>
+      </div>
     </div>
   );
 }

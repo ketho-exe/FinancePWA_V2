@@ -1,5 +1,5 @@
-import { AllocationsPage } from "@/components/finance/pages";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <AllocationsPage />;
+  redirect("/budgets");
 }

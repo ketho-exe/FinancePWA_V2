@@ -1,5 +1,5 @@
-import { SubscriptionsPage } from "@/components/finance/pages";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <SubscriptionsPage />;
+  redirect("/bills");
 }

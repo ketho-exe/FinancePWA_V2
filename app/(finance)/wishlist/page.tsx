@@ -1,5 +1,5 @@
-import { WishlistPage } from "@/components/finance/pages";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <WishlistPage />;
+  redirect("/goals");
 }

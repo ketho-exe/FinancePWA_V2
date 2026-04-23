@@ -50,27 +50,25 @@ export function AppWindow({
   title,
   icon,
   statusText,
+  action,
   children,
   className,
 }: {
   title: string;
   icon?: ReactNode;
   statusText?: string;
+  action?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
     <section className={cn("app-window", className)}>
-      <div className="app-window__titlebar">
+      <div className="app-window__header">
         <div className="app-window__title">
-          <span>{icon ?? "■"}</span>
+          {icon ? <span className="app-window__icon">{icon}</span> : null}
           <span>{title}</span>
         </div>
-        <div className="app-window__controls" aria-hidden="true">
-          <span>_</span>
-          <span>□</span>
-          <span>X</span>
-        </div>
+        {action ? <div>{action}</div> : null}
       </div>
       <div className="app-window__body">{children}</div>
       {statusText ? <div className="app-window__status">{statusText}</div> : null}
@@ -216,13 +214,14 @@ export function ForecastChart({
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
+  { href: "/accounts", label: "Accounts", icon: "🏦" },
   { href: "/transactions", label: "Transactions", icon: "💳" },
   { href: "/budgets", label: "Budgets", icon: "📁" },
-  { href: "/savings", label: "Savings", icon: "💾" },
-  { href: "/wishlist", label: "Wishlist", icon: "⭐" },
-  { href: "/forecast", label: "Forecast", icon: "📈" },
-  { href: "/allocations", label: "Allocations", icon: "🧮" },
-  { href: "/subscriptions", label: "Subscriptions", icon: "🔁" },
+  { href: "/bills", label: "Bills & Recurring", icon: "🔁" },
+  { href: "/goals", label: "Goals", icon: "🎯" },
+  { href: "/reports", label: "Reports", icon: "📈" },
+  { href: "/notifications", label: "Notifications", icon: "🔔" },
+  { href: "/data", label: "Data", icon: "🗂️" },
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];
 
@@ -231,8 +230,15 @@ export function FinanceNav() {
 
   return (
     <nav className="finance-nav" aria-label="Primary">
+      <div className="finance-nav__brand">
+        <span className="finance-nav__logo">F</span>
+        <div>
+          <strong>FinancePWA</strong>
+          <p>Personal finance workspace</p>
+        </div>
+      </div>
       {NAV_ITEMS.map((item) => {
-        const active = pathname === item.href;
+        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
           <Link
             key={item.href}
@@ -281,4 +287,21 @@ export function DataTable({
 
 export function CurrencyText({ value }: { value: number }) {
   return <span>{formatCurrency(value)}</span>;
+}
+
+export function QuickStat({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: "neutral" | "positive" | "negative";
+}) {
+  return (
+    <div className={cn("quick-stat", `quick-stat--${tone}`)}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
 }

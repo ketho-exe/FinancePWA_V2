@@ -1,5 +1,5 @@
-import { ForecastPage } from "@/components/finance/pages";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <ForecastPage />;
+  redirect("/reports");
 }
