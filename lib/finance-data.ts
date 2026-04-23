@@ -286,7 +286,6 @@ async function materializeSalaryTransactions(
   const fromDate = new Date(today);
   fromDate.setMonth(fromDate.getMonth() - 1);
   const toDate = new Date(today);
-  toDate.setMonth(toDate.getMonth() + 3);
 
   const occurrences = getSalaryScheduleOccurrences(
     salaryProfile,
@@ -294,14 +293,24 @@ async function materializeSalaryTransactions(
     toDate.toISOString().slice(0, 10),
   );
 
+  const { data: existingSalaryTransactions, error: existingSalaryTransactionsError } = await client
+    .from("transactions")
+    .select("transaction_date")
+    .eq("workspace_id", workspaceId)
+    .eq("source", "salary_auto")
+    .order("transaction_date", { ascending: false });
+
+  if (existingSalaryTransactionsError) {
+    throw existingSalaryTransactionsError;
+  }
+
   const existingDates = new Set(
-    snapshot.transactions
-      .filter((transaction) => transaction.source === "salary_auto")
-      .map((transaction) => transaction.date),
+    (existingSalaryTransactions ?? []).map((row) => row.transaction_date as string),
   );
 
   const inserts = occurrences
     .filter((date) => !existingDates.has(date))
+    .filter((date) => date <= today.toISOString().slice(0, 10))
     .map((date) => ({
       workspace_id: workspaceId,
       account_id: primaryAccount.id,
