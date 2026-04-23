@@ -1,17 +1,9 @@
-import { getSupabaseEnv, hasSupabaseEnv } from "@/lib/env";
+import { createBrowserClient } from "@supabase/ssr";
 
-export type SupabaseBrowserClient = {
-  anonKey: string;
-  isConfigured: boolean;
-  url: string;
-};
+import { getSupabaseEnv } from "@/lib/env";
 
-export function createSupabaseBrowserClient(): SupabaseBrowserClient {
-  const { url, anonKey } = getSupabaseEnv();
+export function createClient() {
+  const { url, publishableKey } = getSupabaseEnv();
 
-  return {
-    url,
-    anonKey,
-    isConfigured: hasSupabaseEnv()
-  };
+  return createBrowserClient(url, publishableKey);
 }

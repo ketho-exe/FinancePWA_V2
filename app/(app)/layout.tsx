@@ -1,5 +1,19 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 
-export default function AppLayout({ children }: { children: ReactNode }) {
+import { createClient } from "@/lib/supabase/server";
+
+export default async function AppLayout({
+  children
+}: {
+  children: ReactNode;
+}) {
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+
+  if (!claims) {
+    redirect("/login");
+  }
+
   return <>{children}</>;
 }
