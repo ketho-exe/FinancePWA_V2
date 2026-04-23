@@ -6,6 +6,12 @@ import { isProtectedPath } from "@/lib/auth/session";
 import { getSupabaseEnv } from "@/lib/env";
 
 export async function updateSession(request: NextRequest) {
+  if (!isProtectedPath(request.nextUrl.pathname)) {
+    return NextResponse.next({
+      request
+    });
+  }
+
   let response = NextResponse.next({
     request
   });
@@ -36,7 +42,7 @@ export async function updateSession(request: NextRequest) {
 
   const { data: claims } = await supabase.auth.getClaims();
 
-  if (isProtectedPath(request.nextUrl.pathname) && !claims) {
+  if (!claims) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
