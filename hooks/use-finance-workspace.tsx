@@ -14,9 +14,11 @@ import {
 import { ALLOCATION_PRESETS, buildAllocationReport } from "@/lib/allocation";
 import { EMPTY_SNAPSHOT, loadWorkspaceSnapshot } from "@/lib/finance-data";
 import { buildForecastSummary } from "@/lib/forecast";
+import { buildBackupLabel } from "@/lib/import-export";
+import { calculateUkSalaryProfile, getNextPayDate, getSalaryPeriodTakeHome } from "@/lib/payroll";
 import { buildSubscriptionSummary } from "@/lib/subscriptions";
 import { getSupabaseBrowserClientSingleton, hasSupabaseConfig } from "@/lib/supabase";
-import { type RecurringTransaction, type WorkspaceSnapshot } from "@/lib/types";
+import { type AccountKind, type RecurringTransaction, type WorkspaceSnapshot } from "@/lib/types";
 import { formatMonth, toMonthKey } from "@/lib/utils";
 
 type SaveTransactionInput = {
@@ -24,7 +26,17 @@ type SaveTransactionInput = {
   amount: number;
   date: string;
   categoryId: string;
+  accountId?: string;
   notes?: string;
+};
+
+type SaveAccountInput = {
+  name: string;
+  kind: AccountKind;
+  institution?: string;
+  currency: string;
+  openingBalance: number;
+  maskedReference?: string;
 };
 
 type SaveBudgetInput = {
@@ -43,10 +55,21 @@ type SaveSubscriptionInput = {
   name: string;
   amount: number;
   categoryId: string;
+  linkedAccountId?: string;
   billingCycle: RecurringTransaction["billingCycle"];
   nextRunDate: string;
   providerName?: string;
   trialEndDate?: string;
+};
+
+type SaveBillInput = {
+  name: string;
+  amount: number;
+  categoryId: string;
+  linkedAccountId?: string;
+  billingCycle: RecurringTransaction["billingCycle"];
+  nextRunDate: string;
+  autopostEnabled?: boolean;
 };
 
 type SaveWishlistInput = {
@@ -58,6 +81,18 @@ type SaveAllocationRuleInput = {
   name: string;
   percentage: number;
   categoryIds: string[];
+};
+
+type SaveSalaryProfileInput = {
+  taxRegion: "england_wales_ni" | "scotland";
+  annualGrossSalary: number;
+  taxCode: string;
+  payFrequency: "weekly" | "biweekly" | "four_weekly" | "monthly";
+  payDateRule: string;
+  pensionContribution?: number;
+  studentLoanPlan?: string;
+  postgraduateLoan?: boolean;
+  effectiveDate: string;
 };
 
 type AuthInput = {
@@ -78,12 +113,17 @@ type FinanceWorkspaceContextValue = WorkspaceSnapshot & {
   summary: ReturnType<typeof buildForecastSummary>;
   allocationReport: ReturnType<typeof buildAllocationReport>;
   subscriptionSummary: ReturnType<typeof buildSubscriptionSummary>;
+  salaryBreakdown: ReturnType<typeof calculateUkSalaryProfile> | null;
+  nextPayDate: string | null;
+  unreadNotifications: number;
   monthlyIncome: number;
   monthlySpending: number;
   signIn: (input: AuthInput) => Promise<void>;
   signUp: (input: AuthInput) => Promise<void>;
   signOut: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
+  saveAccount: (input: SaveAccountInput) => Promise<void>;
+  deleteAccount: (id: string) => Promise<void>;
   saveTransaction: (input: SaveTransactionInput) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   saveBudget: (input: SaveBudgetInput) => Promise<void>;
@@ -91,6 +131,8 @@ type FinanceWorkspaceContextValue = WorkspaceSnapshot & {
   saveSavingsGoal: (input: SaveGoalInput) => Promise<void>;
   deleteSavingsGoal: (id: string) => Promise<void>;
   saveSubscription: (input: SaveSubscriptionInput) => Promise<void>;
+  saveBill: (input: SaveBillInput) => Promise<void>;
+  markBillAsPaid: (id: string) => Promise<void>;
   toggleRecurringPause: (id: string) => Promise<void>;
   deleteRecurringTransaction: (id: string) => Promise<void>;
   saveWishlistItem: (input: SaveWishlistInput) => Promise<void>;
@@ -98,6 +140,22 @@ type FinanceWorkspaceContextValue = WorkspaceSnapshot & {
   saveAllocationRule: (input: SaveAllocationRuleInput) => Promise<void>;
   deleteAllocationRule: (id: string) => Promise<void>;
   applyAllocationPreset: (preset: keyof typeof ALLOCATION_PRESETS) => Promise<void>;
+  saveSalaryProfile: (input: SaveSalaryProfileInput) => Promise<void>;
+  deleteSalaryProfile: () => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  backupWorkspace: () => Promise<void>;
+  restoreWorkspace: (backupId: string) => Promise<void>;
+  importTransactions: (
+    rows: Array<{
+      date: string;
+      description: string;
+      amount: number;
+      categoryId: string;
+      accountId?: string;
+      notes?: string;
+    }>,
+  ) => Promise<void>;
 };
 
 const FinanceWorkspaceContext = createContext<FinanceWorkspaceContextValue | null>(
@@ -277,6 +335,21 @@ export function FinanceWorkspaceProvider({ children }: { children: ReactNode }) 
     [snapshot.recurring],
   );
 
+  const salaryBreakdown = useMemo(
+    () => (snapshot.salaryProfile ? calculateUkSalaryProfile(snapshot.salaryProfile) : null),
+    [snapshot.salaryProfile],
+  );
+
+  const nextPayDate = useMemo(
+    () => (snapshot.salaryProfile ? getNextPayDate(snapshot.salaryProfile) : null),
+    [snapshot.salaryProfile],
+  );
+
+  const unreadNotifications = useMemo(
+    () => snapshot.notifications.filter((item) => !item.isRead).length,
+    [snapshot.notifications],
+  );
+
   const withUserAction = useCallback(
     async (action: (client: SupabaseClient, user: User) => Promise<void>) => {
       const client = getClient();
@@ -307,6 +380,9 @@ export function FinanceWorkspaceProvider({ children }: { children: ReactNode }) 
       summary,
       allocationReport,
       subscriptionSummary,
+      salaryBreakdown,
+      nextPayDate,
+      unreadNotifications,
       monthlyIncome,
       monthlySpending,
       async signIn(input) {
@@ -341,11 +417,35 @@ export function FinanceWorkspaceProvider({ children }: { children: ReactNode }) 
         setStatusMessage("Signed out.");
       },
       refreshWorkspace,
+      async saveAccount(input) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId =
+            workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const { error } = await client.from("accounts").insert({
+            workspace_id: activeWorkspaceId,
+            name: input.name,
+            kind: input.kind,
+            institution: input.institution ?? null,
+            currency: input.currency,
+            opening_balance: input.openingBalance,
+            current_balance: input.openingBalance,
+            masked_reference: input.maskedReference ?? null,
+          });
+          if (error) throw error;
+        });
+      },
+      async deleteAccount(id) {
+        await withUserAction(async (client) => {
+          const { error } = await client.from("accounts").update({ is_archived: true }).eq("id", id);
+          if (error) throw error;
+        });
+      },
       async saveTransaction(input) {
         await withUserAction(async (client, user) => {
           const activeWorkspaceId = workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
           const { error } = await client.from("transactions").insert({
             workspace_id: activeWorkspaceId,
+            account_id: input.accountId ?? null,
             category_id: input.categoryId,
             description: input.description,
             amount: input.amount,
@@ -406,6 +506,7 @@ export function FinanceWorkspaceProvider({ children }: { children: ReactNode }) 
           const { error } = await client.from("recurring_transactions").insert({
             workspace_id: activeWorkspaceId,
             category_id: input.categoryId,
+            linked_account_id: input.linkedAccountId ?? null,
             name: input.name,
             amount: input.amount,
             billing_cycle: input.billingCycle,
@@ -413,9 +514,63 @@ export function FinanceWorkspaceProvider({ children }: { children: ReactNode }) 
             provider_name: input.providerName ?? null,
             trial_end_date: input.trialEndDate ?? null,
             is_subscription: true,
+            is_bill: false,
+            autopost_enabled: false,
             is_paused: false,
           });
           if (error) throw error;
+        });
+      },
+      async saveBill(input) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId = workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const { error } = await client.from("recurring_transactions").insert({
+            workspace_id: activeWorkspaceId,
+            category_id: input.categoryId,
+            linked_account_id: input.linkedAccountId ?? null,
+            name: input.name,
+            amount: input.amount,
+            billing_cycle: input.billingCycle,
+            next_run_date: input.nextRunDate,
+            is_subscription: false,
+            is_bill: true,
+            autopost_enabled: Boolean(input.autopostEnabled),
+            is_paused: false,
+          });
+          if (error) throw error;
+        });
+      },
+      async markBillAsPaid(id) {
+        await withUserAction(async (client, user) => {
+          const recurring = snapshot.recurring.find((item) => item.id === id);
+          if (!recurring) {
+            throw new Error("Bill not found.");
+          }
+          const activeWorkspaceId =
+            workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+
+          const { error: transactionError } = await client.from("transactions").insert({
+            workspace_id: activeWorkspaceId,
+            account_id: recurring.linkedAccountId ?? null,
+            recurring_transaction_id: recurring.id,
+            category_id: recurring.categoryId,
+            description: recurring.name,
+            amount: recurring.amount,
+            transaction_date: recurring.nextRunDate,
+            source: "bill_payment",
+            notes: "Marked paid from bills workspace.",
+          });
+          if (transactionError) throw transactionError;
+
+          const { getNextRecurringDate } = await import("@/lib/recurring");
+          const { error: recurringError } = await client
+            .from("recurring_transactions")
+            .update({
+              last_paid_date: recurring.nextRunDate,
+              next_run_date: getNextRecurringDate(recurring, recurring.nextRunDate),
+            })
+            .eq("id", recurring.id);
+          if (recurringError) throw recurringError;
         });
       },
       async toggleRecurringPause(id) {
@@ -501,6 +656,289 @@ export function FinanceWorkspaceProvider({ children }: { children: ReactNode }) 
           if (insertError) throw insertError;
         });
       },
+      async saveSalaryProfile(input) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId =
+            workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const { error } = await client.from("salary_profiles").upsert(
+            {
+              workspace_id: activeWorkspaceId,
+              country: "UK",
+              tax_region: input.taxRegion,
+              annual_gross_salary: input.annualGrossSalary,
+              tax_code: input.taxCode,
+              pay_frequency: input.payFrequency,
+              pay_date_rule: input.payDateRule,
+              pension_contribution: input.pensionContribution ?? null,
+              student_loan_plan: input.studentLoanPlan ?? null,
+              postgraduate_loan: Boolean(input.postgraduateLoan),
+              effective_date: input.effectiveDate,
+            },
+            { onConflict: "workspace_id" },
+          );
+          if (error) throw error;
+        });
+      },
+      async deleteSalaryProfile() {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId =
+            workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const { error } = await client
+            .from("salary_profiles")
+            .delete()
+            .eq("workspace_id", activeWorkspaceId);
+          if (error) throw error;
+        });
+      },
+      async markNotificationRead(id) {
+        await withUserAction(async (client) => {
+          const { error } = await client
+            .from("notifications")
+            .update({ is_read: true })
+            .eq("id", id);
+          if (error) throw error;
+        });
+      },
+      async markAllNotificationsRead() {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId =
+            workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const { error } = await client
+            .from("notifications")
+            .update({ is_read: true })
+            .eq("workspace_id", activeWorkspaceId);
+          if (error) throw error;
+        });
+      },
+      async backupWorkspace() {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId =
+            workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const payload = {
+            ...snapshot,
+            backups: [],
+          };
+          const { error } = await client.from("workspace_backups").insert({
+            workspace_id: activeWorkspaceId,
+            label: buildBackupLabel(),
+            payload_json: payload,
+          });
+          if (error) throw error;
+        });
+      },
+      async restoreWorkspace(backupId) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId =
+            workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          const backup = snapshot.backups.find((item) => item.id === backupId);
+          if (!backup) {
+            throw new Error("Backup not found.");
+          }
+
+          const payload = backup.payload;
+
+          const deleteTables = [
+            "notifications",
+            "allocation_rules",
+            "transactions",
+            "recurring_transactions",
+            "wishlist_items",
+            "savings_goals",
+            "budgets",
+            "salary_profiles",
+            "accounts",
+            "categories",
+          ] as const;
+
+          for (const table of deleteTables) {
+            const { error } = await client.from(table).delete().eq("workspace_id", activeWorkspaceId);
+            if (error) throw error;
+          }
+
+          if (payload.categories.length > 0) {
+            const { error } = await client.from("categories").insert(
+              payload.categories.map((item) => ({
+                id: item.id,
+                workspace_id: activeWorkspaceId,
+                name: item.name,
+                kind: item.kind,
+                color: item.color,
+              })),
+            );
+            if (error) throw error;
+          }
+
+          if (payload.accounts.length > 0) {
+            const { error } = await client.from("accounts").insert(
+              payload.accounts.map((item) => ({
+                id: item.id,
+                workspace_id: activeWorkspaceId,
+                name: item.name,
+                kind: item.kind,
+                institution: item.institution ?? null,
+                currency: item.currency,
+                opening_balance: item.openingBalance,
+                current_balance: item.currentBalance,
+                masked_reference: item.maskedReference ?? null,
+                is_archived: Boolean(item.isArchived),
+              })),
+            );
+            if (error) throw error;
+          }
+
+          if (payload.salaryProfile) {
+            const { error } = await client.from("salary_profiles").insert({
+              id: payload.salaryProfile.id,
+              workspace_id: activeWorkspaceId,
+              country: payload.salaryProfile.country,
+              tax_region: payload.salaryProfile.taxRegion,
+              annual_gross_salary: payload.salaryProfile.annualGrossSalary,
+              tax_code: payload.salaryProfile.taxCode,
+              pay_frequency: payload.salaryProfile.payFrequency,
+              pay_date_rule: payload.salaryProfile.payDateRule,
+              pension_contribution: payload.salaryProfile.pensionContribution ?? null,
+              student_loan_plan: payload.salaryProfile.studentLoanPlan ?? null,
+              postgraduate_loan: Boolean(payload.salaryProfile.postgraduateLoan),
+              effective_date: payload.salaryProfile.effectiveDate,
+            });
+            if (error) throw error;
+          }
+
+          if (payload.savingsGoals.length > 0) {
+            const { error } = await client.from("savings_goals").insert(
+              payload.savingsGoals.map((item) => ({
+                id: item.id,
+                workspace_id: activeWorkspaceId,
+                name: item.name,
+                target_amount: item.targetAmount,
+                current_amount: item.currentAmount,
+                target_date: item.targetDate ?? null,
+              })),
+            );
+            if (error) throw error;
+          }
+
+          if (payload.wishlist.length > 0) {
+            const { error } = await client.from("wishlist_items").insert(
+              payload.wishlist.map((item) => ({
+                id: item.id,
+                workspace_id: activeWorkspaceId,
+                linked_goal_id: item.linkedGoalId ?? null,
+                name: item.name,
+                estimated_cost: item.estimatedCost,
+                priority: item.priority,
+              })),
+            );
+            if (error) throw error;
+          }
+
+          if (payload.budgets.length > 0) {
+            const { error } = await client.from("budgets").insert(
+              payload.budgets.map((item) => ({
+                id: item.id,
+                workspace_id: activeWorkspaceId,
+                category_id: item.categoryId,
+                month_key: item.month,
+                amount: item.amount,
+              })),
+            );
+            if (error) throw error;
+          }
+
+          if (payload.recurring.length > 0) {
+            const { error } = await client.from("recurring_transactions").insert(
+              payload.recurring.map((item) => ({
+                id: item.id,
+                workspace_id: activeWorkspaceId,
+                category_id: item.categoryId,
+                linked_account_id: item.linkedAccountId ?? null,
+                name: item.name,
+                amount: item.amount,
+                billing_cycle: item.billingCycle,
+                next_run_date: item.nextRunDate,
+                provider_name: item.providerName ?? null,
+                is_subscription: Boolean(item.isSubscription),
+                is_bill: Boolean(item.isBill),
+                is_paused: Boolean(item.isPaused),
+                autopost_enabled: Boolean(item.autopostEnabled),
+                trial_end_date: item.trialEndDate ?? null,
+                last_paid_date: item.lastPaidDate ?? null,
+              })),
+            );
+            if (error) throw error;
+          }
+
+          if (payload.allocationRules.length > 0) {
+            const { error } = await client.from("allocation_rules").insert(
+              payload.allocationRules.map((item, index) => ({
+                id: item.id,
+                workspace_id: activeWorkspaceId,
+                name: item.name,
+                percentage: item.percentage,
+                category_ids: item.categoryIds,
+                sort_order: index,
+              })),
+            );
+            if (error) throw error;
+          }
+
+          if (payload.transactions.length > 0) {
+            const { error } = await client.from("transactions").insert(
+              payload.transactions.map((item) => ({
+                id: item.id,
+                workspace_id: activeWorkspaceId,
+                account_id: item.accountId ?? null,
+                recurring_transaction_id: item.recurringTransactionId ?? null,
+                category_id: item.categoryId,
+                description: item.description,
+                amount: item.amount,
+                transaction_date: item.date,
+                source: item.source ?? "manual",
+                notes: item.notes ?? null,
+              })),
+            );
+            if (error) throw error;
+          }
+
+          if (payload.notifications.length > 0) {
+            const { error } = await client.from("notifications").insert(
+              payload.notifications.map((item) => ({
+                id: item.id,
+                workspace_id: activeWorkspaceId,
+                kind: item.kind,
+                title: item.title,
+                body: item.body,
+                dedupe_key: `${item.kind}:${item.id}`,
+                is_read: item.isRead,
+                created_at: item.createdAt,
+              })),
+            );
+            if (error) throw error;
+          }
+        });
+      },
+      async importTransactions(rows) {
+        await withUserAction(async (client, user) => {
+          const activeWorkspaceId =
+            workspaceId ?? (await requireWorkspaceContext(client, user)).workspaceId;
+          if (rows.length === 0) {
+            return;
+          }
+          const { error } = await client.from("transactions").insert(
+            rows.map((row) => ({
+              workspace_id: activeWorkspaceId,
+              account_id: row.accountId ?? null,
+              category_id: row.categoryId,
+              description: row.description,
+              amount: row.amount,
+              transaction_date: row.date,
+              source: "manual",
+              notes: row.notes ?? "Imported from CSV",
+            })),
+          );
+          if (error) throw error;
+        });
+      },
     };
 
   return (
@@ -519,12 +957,17 @@ export function useFinanceWorkspace() {
 }
 
 export function useCurrentUserSalarySummary() {
-  const { monthlyIncome, monthlySpending } = useFinanceWorkspace();
+  const { monthlyIncome, monthlySpending, salaryBreakdown, salaryProfile, nextPayDate } =
+    useFinanceWorkspace();
   return {
-    grossIncome: monthlyIncome,
+    grossIncome: salaryBreakdown?.annualGross ?? monthlyIncome,
     spending: monthlySpending,
-    remaining: monthlyIncome - monthlySpending,
+    remaining:
+      (salaryBreakdown && salaryProfile
+        ? getSalaryPeriodTakeHome(salaryBreakdown.annualTakeHome, salaryProfile.payFrequency)
+        : monthlyIncome) - monthlySpending,
     payPeriodLabel: formatMonth(new Date()),
+    nextPayDate,
   };
 }
 

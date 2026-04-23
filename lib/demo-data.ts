@@ -1,6 +1,18 @@
 import { WorkspaceSnapshot } from "@/lib/types";
 
 export const demoSnapshot: WorkspaceSnapshot = {
+  accounts: [
+    {
+      id: "acc-1",
+      name: "Main account",
+      kind: "bank",
+      institution: "Personal bank",
+      currency: "GBP",
+      openingBalance: 0,
+      currentBalance: 1578,
+      maskedReference: "•••• 0000",
+    },
+  ],
   categories: [
     { id: "cat-salary", name: "Salary", kind: "income", color: "#007700" },
     { id: "cat-freelance", name: "Freelance", kind: "income", color: "#006699" },
@@ -16,6 +28,7 @@ export const demoSnapshot: WorkspaceSnapshot = {
       description: "Monthly salary",
       amount: 3200,
       date: "2026-04-01",
+      accountId: "acc-1",
       categoryId: "cat-salary",
       tags: ["payday"],
     },
@@ -24,6 +37,7 @@ export const demoSnapshot: WorkspaceSnapshot = {
       description: "Flat rent",
       amount: 1050,
       date: "2026-04-02",
+      accountId: "acc-1",
       categoryId: "cat-rent",
     },
     {
@@ -31,6 +45,7 @@ export const demoSnapshot: WorkspaceSnapshot = {
       description: "Groceries",
       amount: 112,
       date: "2026-04-10",
+      accountId: "acc-1",
       categoryId: "cat-groceries",
       tags: ["food"],
     },
@@ -39,6 +54,7 @@ export const demoSnapshot: WorkspaceSnapshot = {
       description: "Coffee and lunch",
       amount: 18,
       date: "2026-04-11",
+      accountId: "acc-1",
       categoryId: "cat-leisure",
     },
     {
@@ -46,6 +62,7 @@ export const demoSnapshot: WorkspaceSnapshot = {
       description: "Rail card top-up",
       amount: 42,
       date: "2026-04-13",
+      accountId: "acc-1",
       categoryId: "cat-transport",
     },
     {
@@ -53,6 +70,7 @@ export const demoSnapshot: WorkspaceSnapshot = {
       description: "Transfer to savings",
       amount: 400,
       date: "2026-04-15",
+      accountId: "acc-1",
       categoryId: "cat-savings",
     },
   ],
@@ -108,4 +126,19 @@ export const demoSnapshot: WorkspaceSnapshot = {
     { id: "alloc-2", name: "Wants", percentage: 30, categoryIds: ["cat-leisure"] },
     { id: "alloc-3", name: "Savings", percentage: 20, categoryIds: ["cat-savings"] },
   ],
+  salaryProfile: {
+    id: "salary-1",
+    country: "UK",
+    taxRegion: "england_wales_ni",
+    annualGrossSalary: 42000,
+    taxCode: "1257L",
+    payFrequency: "monthly",
+    payDateRule: "28th",
+    pensionContribution: 5,
+    studentLoanPlan: "none",
+    postgraduateLoan: false,
+    effectiveDate: "2026-01-01",
+  },
+  notifications: [],
+  backups: [],
 };

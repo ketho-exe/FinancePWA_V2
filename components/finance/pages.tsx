@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useState } from "react";
 import {
   AppButton,
   AppCard,
@@ -24,6 +24,17 @@ import {
   useSubscriptionSummary,
 } from "@/hooks/use-finance-workspace";
 import { getUnallocatedAmount } from "@/lib/allocation";
+import { normalizeImportRows, parseCsvText, type ParsedImportRow } from "@/lib/import-export";
+import {
+  buildCategoryBreakdownReport,
+  buildMonthlySummaryCsv,
+  buildMonthlySummaryReport,
+  buildTransactionsCsv,
+  buildTrendReport,
+  buildWorkspaceBackup,
+  downloadTextFile,
+} from "@/lib/reports";
+import { AccountKind } from "@/lib/types";
 import { formatCurrency, formatMonth } from "@/lib/utils";
 
 function categoryName(categoryId: string, categories: { id: string; name: string }[]) {
@@ -32,6 +43,7 @@ function categoryName(categoryId: string, categories: { id: string; name: string
 
 export function DashboardPage() {
   const {
+    accounts,
     currentMonth,
     summary,
     monthlyIncome,
@@ -40,16 +52,24 @@ export function DashboardPage() {
     categories,
     recurring,
     transactions,
+    nextPayDate,
+    salaryBreakdown,
   } = useFinanceWorkspace();
   const subscriptions = useSubscriptionSummary();
   const upcomingBills = recurring.filter((item) => !item.isPaused).slice(0, 4);
   const recentTransactions = transactions.slice(0, 5);
   const totalBalance = monthlyIncome - monthlySpending;
-  const accountSnapshot = [
-    { name: "Main current account", amount: totalBalance * 0.72 },
-    { name: "Savings pot", amount: savingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0) },
-    { name: "Bills buffer", amount: Math.max(summary.safeToSpend * 0.35, 0) },
-  ];
+  const accountSnapshot =
+    accounts.length > 0
+      ? accounts
+      : [
+          { id: "fallback-main", name: "Main current account", currentBalance: totalBalance },
+          {
+            id: "fallback-savings",
+            name: "Savings pot",
+            currentBalance: savingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0),
+          },
+        ];
 
   return (
     <div className="page-stack">
@@ -70,7 +90,13 @@ export function DashboardPage() {
             <SectionHeading title="Cash flow" subtitle="30 day forward look" />
             <ForecastChart points={summary.points} />
             <div className="toolbar-row">
-              <QuickStat label="Salary next payday" value={formatCurrency(monthlyIncome || 0)} tone="positive" />
+              <QuickStat
+                label={`Salary ${nextPayDate ? `on ${nextPayDate}` : "next payday"}`}
+                value={formatCurrency(
+                  salaryBreakdown ? salaryBreakdown.annualTakeHome / 12 : monthlyIncome || 0,
+                )}
+                tone="positive"
+              />
               <QuickStat label="Bills in 7 days" value={String(upcomingBills.length)} />
               <QuickStat label="Large alerts" value={String(transactions.filter((item) => Math.abs(item.amount) >= 250).length)} tone="negative" />
             </div>
@@ -109,10 +135,10 @@ export function DashboardPage() {
             <SectionHeading title="Account balances snapshot" subtitle="Quick financial position" />
             <div className="list-stack">
               {accountSnapshot.map((account) => (
-                <AppPanel key={account.name}>
+                <AppPanel key={account.id}>
                   <div className="row-between">
                     <strong>{account.name}</strong>
-                    <span>{formatCurrency(account.amount)}</span>
+                    <span>{formatCurrency(account.currentBalance)}</span>
                   </div>
                   <span className="muted-text">Estimated snapshot</span>
                 </AppPanel>
@@ -138,10 +164,11 @@ export function DashboardPage() {
 }
 
 export function TransactionsPage() {
-  const { categories, transactions, saveTransaction, deleteTransaction } = useFinanceWorkspace();
+  const { accounts, categories, transactions, saveTransaction, deleteTransaction } = useFinanceWorkspace();
   const [draft, setDraft] = useState({
     description: "",
     amount: "",
+    accountId: accounts[0]?.id ?? "",
     categoryId: categories[0]?.id ?? "",
     date: new Date().toISOString().slice(0, 10),
   });
@@ -151,6 +178,7 @@ export function TransactionsPage() {
     void saveTransaction({
       description: draft.description,
       amount: Number(draft.amount),
+      accountId: draft.accountId,
       categoryId: draft.categoryId,
       date: draft.date,
     });
@@ -163,6 +191,11 @@ export function TransactionsPage() {
         <form className="form-grid" onSubmit={handleSubmit}>
           <input value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="e.g. Coffee, freelance, rent" />
           <input value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: event.target.value })} placeholder="Amount" type="number" />
+          <select value={draft.accountId} onChange={(event) => setDraft({ ...draft, accountId: event.target.value })}>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>{account.name}</option>
+            ))}
+          </select>
           <select value={draft.categoryId} onChange={(event) => setDraft({ ...draft, categoryId: event.target.value })}>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>{category.name}</option>
@@ -173,10 +206,11 @@ export function TransactionsPage() {
         </form>
       </AppGroupBox>
       <DataTable
-        headers={["Date", "Description", "Category", "Amount", "Actions"]}
+        headers={["Date", "Description", "Account", "Category", "Amount", "Actions"]}
         rows={transactions.map((transaction) => [
           transaction.date,
           transaction.description,
+          accounts.find((account) => account.id === transaction.accountId)?.name ?? "Unassigned",
           categoryName(transaction.categoryId, categories),
           formatCurrency(transaction.amount),
           <AppButton
@@ -504,8 +538,20 @@ export function SubscriptionsPage() {
 }
 
 export function SettingsPage() {
-  const { categories, currentMonth, signOut } = useFinanceWorkspace();
+  const { categories, currentMonth, salaryProfile, saveSalaryProfile, deleteSalaryProfile, signOut } =
+    useFinanceWorkspace();
   const salarySummary = useCurrentUserSalarySummary();
+  const [salaryDraft, setSalaryDraft] = useState({
+    taxRegion: salaryProfile?.taxRegion ?? ("england_wales_ni" as const),
+    annualGrossSalary: String(salaryProfile?.annualGrossSalary ?? 42000),
+    taxCode: salaryProfile?.taxCode ?? "1257L",
+    payFrequency: salaryProfile?.payFrequency ?? ("monthly" as const),
+    payDateRule: salaryProfile?.payDateRule ?? "28th",
+    pensionContribution: String(salaryProfile?.pensionContribution ?? 5),
+    studentLoanPlan: salaryProfile?.studentLoanPlan ?? "none",
+    postgraduateLoan: salaryProfile?.postgraduateLoan ?? false,
+    effectiveDate: salaryProfile?.effectiveDate ?? new Date().toISOString().slice(0, 10),
+  });
 
   return (
     <AppWindow title="Settings" icon="⚙" statusText="Workspace and schema handoff ready">
@@ -516,6 +562,7 @@ export function SettingsPage() {
             <AppPanel><div className="row-between"><span>Gross pay</span><CurrencyText value={salarySummary.grossIncome} /></div></AppPanel>
             <AppPanel><div className="row-between"><span>Spending</span><CurrencyText value={salarySummary.spending} /></div></AppPanel>
             <AppPanel><div className="row-between"><span>Remaining</span><CurrencyText value={salarySummary.remaining} /></div></AppPanel>
+            <AppPanel><div className="row-between"><span>Next pay date</span><span>{salarySummary.nextPayDate ?? "Not configured"}</span></div></AppPanel>
           </div>
         </AppCard>
         <AppCard>
@@ -528,43 +575,138 @@ export function SettingsPage() {
           <p className="muted-text">The Supabase schema includes these core entities and row-level security defaults for a personal workspace setup.</p>
         </AppCard>
       </div>
+      <AppCard>
+        <SectionHeading
+          title="Salary Profile"
+          subtitle="UK payroll basics for dashboard and reporting"
+          action={
+            salaryProfile ? (
+              <AppButton variant="danger" onClick={() => void deleteSalaryProfile()}>
+                Delete salary profile
+              </AppButton>
+            ) : null
+          }
+        />
+        <div className="three-grid">
+          <select value={salaryDraft.taxRegion} onChange={(event) => setSalaryDraft({ ...salaryDraft, taxRegion: event.target.value as "england_wales_ni" | "scotland" })}>
+            <option value="england_wales_ni">England / Wales / NI</option>
+            <option value="scotland">Scotland</option>
+          </select>
+          <input type="number" value={salaryDraft.annualGrossSalary} onChange={(event) => setSalaryDraft({ ...salaryDraft, annualGrossSalary: event.target.value })} placeholder="Annual gross salary" />
+          <input value={salaryDraft.taxCode} onChange={(event) => setSalaryDraft({ ...salaryDraft, taxCode: event.target.value })} placeholder="Tax code" />
+          <select value={salaryDraft.payFrequency} onChange={(event) => setSalaryDraft({ ...salaryDraft, payFrequency: event.target.value as "weekly" | "biweekly" | "four_weekly" | "monthly" })}>
+            <option value="monthly">Monthly</option>
+            <option value="weekly">Weekly</option>
+            <option value="biweekly">Biweekly</option>
+            <option value="four_weekly">Four-weekly</option>
+          </select>
+          <input value={salaryDraft.payDateRule} onChange={(event) => setSalaryDraft({ ...salaryDraft, payDateRule: event.target.value })} placeholder="Pay date rule" />
+          <input type="date" value={salaryDraft.effectiveDate} onChange={(event) => setSalaryDraft({ ...salaryDraft, effectiveDate: event.target.value })} />
+          <input type="number" value={salaryDraft.pensionContribution} onChange={(event) => setSalaryDraft({ ...salaryDraft, pensionContribution: event.target.value })} placeholder="Pension %" />
+          <select value={salaryDraft.studentLoanPlan} onChange={(event) => setSalaryDraft({ ...salaryDraft, studentLoanPlan: event.target.value })}>
+            <option value="none">No student loan</option>
+            <option value="plan_1">Plan 1</option>
+            <option value="plan_2">Plan 2</option>
+            <option value="plan_4">Plan 4</option>
+            <option value="plan_5">Plan 5</option>
+          </select>
+          <label className="tag-pill">
+            <input type="checkbox" checked={salaryDraft.postgraduateLoan} onChange={(event) => setSalaryDraft({ ...salaryDraft, postgraduateLoan: event.target.checked })} />
+            <span>Postgraduate loan</span>
+          </label>
+        </div>
+        <div className="toolbar-row">
+          <AppButton
+            variant="primary"
+            onClick={() =>
+              void saveSalaryProfile({
+                taxRegion: salaryDraft.taxRegion,
+                annualGrossSalary: Number(salaryDraft.annualGrossSalary),
+                taxCode: salaryDraft.taxCode,
+                payFrequency: salaryDraft.payFrequency,
+                payDateRule: salaryDraft.payDateRule,
+                pensionContribution: Number(salaryDraft.pensionContribution || 0),
+                studentLoanPlan: salaryDraft.studentLoanPlan,
+                postgraduateLoan: salaryDraft.postgraduateLoan,
+                effectiveDate: salaryDraft.effectiveDate,
+              })
+            }
+          >
+            Save salary profile
+          </AppButton>
+        </div>
+      </AppCard>
     </AppWindow>
   );
 }
 
 export function AccountsPage() {
-  const { monthlyIncome, monthlySpending, savingsGoals, transactions } = useFinanceWorkspace();
-  const accounts = [
-    {
-      name: "Main current account",
-      type: "Bank account",
-      balance: monthlyIncome - monthlySpending,
-      detail: `${transactions.length} linked transactions`,
-    },
-    {
-      name: "Savings account",
-      type: "Savings",
-      balance: savingsGoals.reduce((sum, goal) => sum + goal.currentAmount, 0),
-      detail: `${savingsGoals.length} tracked goals`,
-    },
-    {
-      name: "Cash buffer",
-      type: "Cash",
-      balance: Math.max((monthlyIncome - monthlySpending) * 0.18, 0),
-      detail: "Estimated wallet and buffer",
-    },
-  ];
+  const { accounts, saveAccount, deleteAccount, transactions } = useFinanceWorkspace();
+  const [draft, setDraft] = useState<{
+    name: string;
+    kind: AccountKind;
+    institution: string;
+    currency: string;
+    openingBalance: string;
+    maskedReference: string;
+  }>({
+    name: "",
+    kind: "bank",
+    institution: "",
+    currency: "GBP",
+    openingBalance: "",
+    maskedReference: "",
+  });
 
   return (
     <AppWindow title="Accounts" icon="🏦" statusText="Multi-account management foundation">
+      <AppGroupBox label="Add account">
+        <div className="form-grid">
+          <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Account name" />
+          <select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value as AccountKind })}>
+            <option value="bank">Bank</option>
+            <option value="savings">Savings</option>
+            <option value="cash">Cash</option>
+            <option value="credit_card">Credit card</option>
+            <option value="loan">Loan</option>
+            <option value="investment">Investment</option>
+          </select>
+          <input value={draft.institution} onChange={(event) => setDraft({ ...draft, institution: event.target.value })} placeholder="Institution" />
+          <input value={draft.openingBalance} onChange={(event) => setDraft({ ...draft, openingBalance: event.target.value })} type="number" placeholder="Opening balance" />
+          <AppButton
+            variant="primary"
+            onClick={() => {
+              if (!draft.name || !draft.openingBalance) return;
+              void saveAccount({
+                name: draft.name,
+                kind: draft.kind,
+                institution: draft.institution,
+                currency: draft.currency,
+                openingBalance: Number(draft.openingBalance),
+                maskedReference: draft.maskedReference,
+              });
+              setDraft({ ...draft, name: "", institution: "", openingBalance: "", maskedReference: "" });
+            }}
+          >
+            Add account
+          </AppButton>
+        </div>
+      </AppGroupBox>
       <div className="three-grid">
         {accounts.map((account) => (
-          <AppCard key={account.name}>
+          <AppCard key={account.id}>
             <StatusBadge status="active" />
-            <h3>{account.name}</h3>
-            <p className="muted-text">{account.type}</p>
-            <p className="card-stat">{formatCurrency(account.balance)}</p>
-            <p className="muted-text">{account.detail}</p>
+            <div className="row-between">
+              <h3>{account.name}</h3>
+              <AppButton variant="danger" onClick={() => void deleteAccount(account.id)}>
+                Archive
+              </AppButton>
+            </div>
+            <p className="muted-text">{account.kind} {account.institution ? `· ${account.institution}` : ""}</p>
+            <p className="card-stat">{formatCurrency(account.currentBalance)}</p>
+            <p className="muted-text">
+              {transactions.filter((transaction) => transaction.accountId === account.id).length} linked transactions
+            </p>
           </AppCard>
         ))}
       </div>
@@ -585,17 +727,80 @@ export function AccountsPage() {
 }
 
 export function BillsPage() {
-  const { recurring } = useFinanceWorkspace();
-  const dueSoon = recurring.filter((item) => !item.isPaused).slice(0, 6);
+  const { accounts, categories, recurring, markBillAsPaid, saveBill } = useFinanceWorkspace();
+  const bills = recurring.filter((item) => item.isBill);
+  const dueSoon = bills.filter((item) => item.dueStatus !== "paid").slice(0, 6);
+  const [draft, setDraft] = useState<{
+    name: string;
+    amount: string;
+    categoryId: string;
+    linkedAccountId: string;
+    billingCycle: "weekly" | "monthly" | "quarterly" | "annual";
+    nextRunDate: string;
+    autopostEnabled: boolean;
+  }>({
+    name: "",
+    amount: "",
+    categoryId: categories.find((item) => item.kind !== "income")?.id ?? "",
+    linkedAccountId: accounts[0]?.id ?? "",
+    billingCycle: "monthly" as const,
+    nextRunDate: new Date().toISOString().slice(0, 10),
+    autopostEnabled: true,
+  });
 
   return (
     <AppWindow title="Bills & Recurring" icon="🔁" statusText={`${dueSoon.length} active upcoming items`}>
       <div className="metric-grid">
         <MetricCard label="Upcoming payments" value={String(dueSoon.length)} />
-        <MetricCard label="Paused rules" value={String(recurring.filter((item) => item.isPaused).length)} />
+        <MetricCard label="Paused rules" value={String(bills.filter((item) => item.isPaused).length)} />
         <MetricCard label="Subscriptions" value={String(recurring.filter((item) => item.isSubscription).length)} />
-        <MetricCard label="Due soon" value={String(dueSoon.filter((item) => !item.isPaused).length)} />
+        <MetricCard label="Overdue" value={String(bills.filter((item) => item.dueStatus === "overdue").length)} />
       </div>
+      <AppGroupBox label="Add Bill">
+        <div className="form-grid">
+          <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Bill name" />
+          <input value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: event.target.value })} type="number" placeholder="Amount" />
+          <select value={draft.linkedAccountId} onChange={(event) => setDraft({ ...draft, linkedAccountId: event.target.value })}>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>{account.name}</option>
+            ))}
+          </select>
+          <select value={draft.categoryId} onChange={(event) => setDraft({ ...draft, categoryId: event.target.value })}>
+            {categories.filter((category) => category.kind !== "income").map((category) => (
+              <option key={category.id} value={category.id}>{category.name}</option>
+            ))}
+          </select>
+          <select value={draft.billingCycle} onChange={(event) => setDraft({ ...draft, billingCycle: event.target.value as "weekly" | "monthly" | "quarterly" | "annual" })}>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="annual">Annual</option>
+          </select>
+          <input value={draft.nextRunDate} onChange={(event) => setDraft({ ...draft, nextRunDate: event.target.value })} type="date" />
+          <label className="tag-pill">
+            <input type="checkbox" checked={draft.autopostEnabled} onChange={(event) => setDraft({ ...draft, autopostEnabled: event.target.checked })} />
+            <span>Auto-post</span>
+          </label>
+          <AppButton
+            variant="primary"
+            onClick={() => {
+              if (!draft.name || !draft.amount) return;
+              void saveBill({
+                name: draft.name,
+                amount: Number(draft.amount),
+                categoryId: draft.categoryId,
+                linkedAccountId: draft.linkedAccountId,
+                billingCycle: draft.billingCycle,
+                nextRunDate: draft.nextRunDate,
+                autopostEnabled: draft.autopostEnabled,
+              });
+              setDraft({ ...draft, name: "", amount: "" });
+            }}
+          >
+            Add bill
+          </AppButton>
+        </div>
+      </AppGroupBox>
       <AppCard>
         <SectionHeading title="Upcoming payments" subtitle="Recurring items and reminders" />
         <div className="list-stack">
@@ -607,8 +812,23 @@ export function BillsPage() {
                   <p className="muted-text">{item.nextRunDate} · {item.billingCycle}</p>
                 </div>
                 <div className="toolbar-row">
-                  <StatusBadge status={item.isPaused ? "paused" : "due"} />
+                  <StatusBadge
+                    status={
+                      item.isPaused
+                        ? "paused"
+                        : item.dueStatus === "overdue"
+                          ? "danger"
+                          : item.dueStatus === "due_soon"
+                            ? "warning"
+                            : item.dueStatus === "paid"
+                              ? "safe"
+                              : "active"
+                    }
+                  />
                   <span>{formatCurrency(item.amount)}</span>
+                  <AppButton onClick={() => void markBillAsPaid(item.id)}>
+                    Mark paid
+                  </AppButton>
                 </div>
               </div>
             </AppPanel>
@@ -666,14 +886,41 @@ export function GoalsPage() {
 }
 
 export function ReportsPage() {
-  const { monthlyIncome, monthlySpending, summary } = useFinanceWorkspace();
+  const { accounts, categories, currentMonth, salaryBreakdown, summary, transactions } =
+    useFinanceWorkspace();
+  const monthlySummary = buildMonthlySummaryReport(currentMonth, transactions, categories);
+  const categoryBreakdown = buildCategoryBreakdownReport(currentMonth, transactions, categories);
+  const trendMonths = Array.from({ length: 4 }).map((_, index) => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - (3 - index));
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const trendReport = buildTrendReport(transactions, categories, trendMonths);
+  const accountLookup = new Map(accounts.map((account) => [account.id, account.name]));
 
   return (
-    <AppWindow title="Reports" icon="📈" statusText="Modern reporting workspace">
+    <AppWindow
+      title="Reports"
+      icon="📈"
+      statusText="Modern reporting workspace"
+      action={
+        <AppButton
+          onClick={() =>
+            downloadTextFile(
+              `finance-summary-${currentMonth}.csv`,
+              buildMonthlySummaryCsv(monthlySummary, categoryBreakdown),
+              "text/csv;charset=utf-8",
+            )
+          }
+        >
+          Export summary CSV
+        </AppButton>
+      }
+    >
       <div className="three-grid">
         <AppCard>
           <h3>Monthly summary</h3>
-          <p className="card-stat">{formatCurrency(monthlyIncome - monthlySpending)}</p>
+          <p className="card-stat">{formatCurrency(monthlySummary.net)}</p>
           <p className="muted-text">Net movement this month</p>
         </AppCard>
         <AppCard>
@@ -682,17 +929,53 @@ export function ReportsPage() {
           <p className="muted-text">Projected balance</p>
         </AppCard>
         <AppCard>
-          <h3>Budget variance</h3>
-          <p className="card-stat">{String(summary.budgetRisk.length)}</p>
-          <p className="muted-text">Tracked budget lines</p>
+          <h3>Net worth base</h3>
+          <p className="card-stat">{formatCurrency(accounts.reduce((sum, account) => sum + account.currentBalance, 0))}</p>
+          <p className="muted-text">Across live accounts</p>
         </AppCard>
       </div>
       <AppCard>
-        <SectionHeading title="Planned report suite" subtitle="Category breakdowns, trends, exports, and net worth" />
+        <SectionHeading title="Category breakdown" subtitle={`Spending by category for ${currentMonth}`} />
+        {categoryBreakdown.length === 0 ? (
+          <EmptyState title="No spending data" body="Add expense transactions to see category reporting." />
+        ) : (
+          <DataTable
+            headers={["Category", "Amount"]}
+            rows={categoryBreakdown.map((row) => [row.category, formatCurrency(row.amount)])}
+          />
+        )}
+      </AppCard>
+      <AppCard>
+        <SectionHeading title="Trend report" subtitle="Income, spending, and net movement over the last months" />
+        <DataTable
+          headers={["Month", "Income", "Expenses", "Net"]}
+          rows={trendReport.map((row) => [
+            row.month,
+            formatCurrency(row.income),
+            formatCurrency(row.expenses),
+            formatCurrency(row.net),
+          ])}
+        />
+      </AppCard>
+      <AppCard>
+        <SectionHeading title="Report actions" subtitle="Exports and downstream analysis" />
         <div className="three-grid">
-          <QuickStat label="Category breakdown" value="Ready to add" />
-          <QuickStat label="Trend charts" value="Ready to add" />
-          <QuickStat label="CSV / PDF export" value="Ready to add" />
+          <QuickStat label="Category breakdown" value={String(categoryBreakdown.length)} />
+          <QuickStat label="Trend charts" value={formatCurrency(summary.projectedBalance)} />
+          <QuickStat label="Salary annual take-home" value={salaryBreakdown ? formatCurrency(salaryBreakdown.annualTakeHome) : "Not set"} />
+        </div>
+        <div className="toolbar-row">
+          <AppButton
+            onClick={() =>
+              downloadTextFile(
+                `transactions-${currentMonth}.csv`,
+                buildTransactionsCsv(transactions, categories, accountLookup),
+                "text/csv;charset=utf-8",
+              )
+            }
+          >
+            Export transactions CSV
+          </AppButton>
         </div>
       </AppCard>
     </AppWindow>
@@ -700,24 +983,43 @@ export function ReportsPage() {
 }
 
 export function NotificationsPage() {
-  const { recurring, budgets, transactions } = useFinanceWorkspace();
-  const notifications = [
-    `${recurring.filter((item) => !item.isPaused).length} recurring items need monitoring`,
-    `${budgets.length} active budgets available for threshold alerts`,
-    `${transactions.filter((item) => Math.abs(item.amount) >= 250).length} large transactions this month`,
-  ];
+  const { markAllNotificationsRead, markNotificationRead, notifications, unreadNotifications } =
+    useFinanceWorkspace();
 
   return (
-    <AppWindow title="Notifications" icon="🔔" statusText="Alerts, reminders, and finance events">
+    <AppWindow
+      title="Notifications"
+      icon="🔔"
+      statusText={`${unreadNotifications} unread alerts`}
+      action={
+        notifications.length > 0 ? (
+          <AppButton onClick={() => void markAllNotificationsRead()}>Mark all read</AppButton>
+        ) : null
+      }
+    >
       <div className="list-stack">
-        {notifications.map((notification) => (
-          <AppPanel key={notification}>
-            <div className="row-between">
-              <strong>{notification}</strong>
-              <StatusBadge status="warning" />
-            </div>
-          </AppPanel>
-        ))}
+        {notifications.length === 0 ? (
+          <EmptyState title="No notifications yet" body="Budget alerts, salary reminders, and bill notices will show up here." />
+        ) : (
+          notifications.map((notification) => (
+            <AppPanel key={notification.id}>
+              <div className="row-between">
+                <div>
+                  <strong>{notification.title}</strong>
+                  <p className="muted-text">{notification.body}</p>
+                </div>
+                <div className="toolbar-row">
+                  <StatusBadge status={notification.isRead ? "active" : "warning"} />
+                  {!notification.isRead ? (
+                    <AppButton onClick={() => void markNotificationRead(notification.id)}>
+                      Mark read
+                    </AppButton>
+                  ) : null}
+                </div>
+              </div>
+            </AppPanel>
+          ))
+        )}
       </div>
       <AppCard>
         <SectionHeading title="Notification center roadmap" subtitle="Bill reminders, budget alerts, salary events, and unusual activity" />
@@ -728,25 +1030,176 @@ export function NotificationsPage() {
 }
 
 export function DataPage() {
+  const {
+    accounts,
+    backups,
+    backupWorkspace,
+    categories,
+    currentMonth,
+    importTransactions,
+    restoreWorkspace,
+    transactions,
+    ...snapshot
+  } = useFinanceWorkspace();
+  const accountLookup = new Map(accounts.map((account) => [account.id, account.name]));
+  const [parsedRows, setParsedRows] = useState<ParsedImportRow[]>([]);
+  const transactionCsv = buildTransactionsCsv(transactions, categories, accountLookup);
+  const backupJson = buildWorkspaceBackup({
+    accounts,
+    categories,
+    transactions,
+    budgets: snapshot.budgets,
+    savingsGoals: snapshot.savingsGoals,
+    wishlist: snapshot.wishlist,
+    recurring: snapshot.recurring,
+    allocationRules: snapshot.allocationRules,
+    salaryProfile: snapshot.salaryProfile,
+    notifications: snapshot.notifications,
+    backups: [],
+  });
+  const normalizedRows = normalizeImportRows(parsedRows, {
+    accounts,
+    categories,
+    transactions,
+    budgets: snapshot.budgets,
+    savingsGoals: snapshot.savingsGoals,
+    wishlist: snapshot.wishlist,
+    recurring: snapshot.recurring,
+    allocationRules: snapshot.allocationRules,
+    salaryProfile: snapshot.salaryProfile,
+    notifications: snapshot.notifications,
+    backups,
+  });
+
+  function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    void file.text().then((text) => {
+      setParsedRows(parseCsvText(text));
+    });
+  }
+
   return (
     <AppWindow title="Data" icon="🗂️" statusText="Import, export, backup, and restore">
       <div className="three-grid">
         <AppCard>
           <h3>Import</h3>
           <p className="muted-text">CSV and bank statement ingestion with preview, mapping, and duplicate detection.</p>
-          <AppButton variant="primary">Import data</AppButton>
+          <input type="file" accept=".csv,text/csv" onChange={handleFileUpload} />
+          <AppButton
+            variant="primary"
+            onClick={() => void importTransactions(normalizedRows)}
+            disabled={normalizedRows.length === 0}
+          >
+            Import data
+          </AppButton>
         </AppCard>
         <AppCard>
           <h3>Export</h3>
           <p className="muted-text">Full workspace export, transaction export, and report packaging.</p>
-          <AppButton>Export data</AppButton>
+          <AppButton
+            onClick={() =>
+              downloadTextFile(
+                `transactions-${currentMonth}.csv`,
+                transactionCsv,
+                "text/csv;charset=utf-8",
+              )
+            }
+          >
+            Export data
+          </AppButton>
         </AppCard>
         <AppCard>
           <h3>Backup</h3>
           <p className="muted-text">Managed backup history with restore preview and dry-run checks.</p>
-          <AppButton>Backups</AppButton>
+          <div className="toolbar-row">
+            <AppButton
+              variant="primary"
+              onClick={() => void backupWorkspace()}
+            >
+              Create backup
+            </AppButton>
+            <AppButton
+            onClick={() =>
+              downloadTextFile(
+                `workspace-backup-${currentMonth}.json`,
+                backupJson,
+                "application/json;charset=utf-8",
+              )
+            }
+          >
+              Download JSON
+            </AppButton>
+          </div>
         </AppCard>
       </div>
+      <AppCard>
+        <SectionHeading title="Import preview" subtitle="Rows parsed from your CSV before commit" />
+        {normalizedRows.length === 0 ? (
+          <EmptyState title="No CSV loaded" body="Choose a CSV file with date, description, amount, and optional account/category columns." />
+        ) : (
+          <DataTable
+            headers={["Date", "Description", "Account", "Category", "Amount"]}
+            rows={normalizedRows.slice(0, 10).map((row) => [
+              row.date,
+              row.description,
+              accountLookup.get(row.accountId ?? "") ?? "Default",
+              categories.find((category) => category.id === row.categoryId)?.name ?? "Unknown",
+              formatCurrency(row.amount),
+            ])}
+          />
+        )}
+      </AppCard>
+      <AppCard>
+        <SectionHeading title="Export preview" subtitle="Current workspace sizes and backup contents" />
+        <div className="three-grid">
+          <QuickStat label="Accounts" value={String(accounts.length)} />
+          <QuickStat label="Transactions" value={String(transactions.length)} />
+          <QuickStat label="Notifications" value={String(snapshot.notifications.length)} />
+        </div>
+        <DataTable
+          headers={["Collection", "Rows"]}
+          rows={[
+            ["Accounts", String(accounts.length)],
+            ["Transactions", String(transactions.length)],
+            ["Budgets", String(snapshot.budgets.length)],
+            ["Goals", String(snapshot.savingsGoals.length)],
+            ["Recurring", String(snapshot.recurring.length)],
+            ["Notifications", String(snapshot.notifications.length)],
+          ]}
+        />
+      </AppCard>
+      <AppCard>
+        <SectionHeading title="Backup history" subtitle="Saved workspace snapshots ready for restore" />
+        {backups.length === 0 ? (
+          <EmptyState title="No backups yet" body="Create a backup before large imports or structural changes." />
+        ) : (
+          <DataTable
+            headers={["Created", "Label", "Actions"]}
+            rows={backups.map((backup) => [
+              backup.createdAt.slice(0, 16).replace("T", " "),
+              backup.label,
+              <div key={backup.id} className="toolbar-row">
+                <AppButton
+                  onClick={() =>
+                    downloadTextFile(
+                      `${backup.label.replace(/\s+/g, "-").toLowerCase()}.json`,
+                      buildWorkspaceBackup(backup.payload),
+                      "application/json;charset=utf-8",
+                    )
+                  }
+                >
+                  Download
+                </AppButton>
+                <AppButton variant="danger" onClick={() => void restoreWorkspace(backup.id)}>
+                  Restore
+                </AppButton>
+              </div>,
+            ])}
+          />
+        )}
+      </AppCard>
     </AppWindow>
   );
 }
