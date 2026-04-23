@@ -1,0 +1,2 @@
+-- Intentionally empty for now.
+-- Seed data will be added once auth-backed local fixtures are defined.
