@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import SalaryPage from "@/app/(app)/salary/page";
 import { AppShell } from "@/components/app-shell";
+import { estimateUkMonthlyPay } from "@/lib/salary/uk";
 
 describe("AppShell", () => {
   it("renders primary finance navigation links and theme toggle", () => {
@@ -29,10 +30,41 @@ describe("AppShell", () => {
 });
 
 describe("SalaryPage", () => {
-  it("shows salary inputs and estimated take-home output", () => {
+  it("shows salary inputs and updates the estimated take-home output", () => {
     render(<SalaryPage />);
 
-    expect(screen.getByLabelText("Annual salary")).toBeInTheDocument();
+    const annualSalaryInput = screen.getByLabelText("Annual salary");
+    const pensionInput = screen.getByLabelText("Pension percent");
+    const initialEstimate = estimateUkMonthlyPay({
+      annualSalary: 42_000,
+      pensionPercent: 5
+    }).netMonthly;
+    const updatedEstimate = estimateUkMonthlyPay({
+      annualSalary: 50_000,
+      pensionPercent: 5
+    }).netMonthly;
+
+    expect(annualSalaryInput).toBeInTheDocument();
+    expect(pensionInput).toBeInTheDocument();
     expect(screen.getByText("Estimated monthly net pay")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        new Intl.NumberFormat("en-GB", {
+          style: "currency",
+          currency: "GBP"
+        }).format(initialEstimate)
+      )
+    ).toBeInTheDocument();
+
+    fireEvent.change(annualSalaryInput, { target: { value: "50000" } });
+
+    expect(
+      screen.getByText(
+        new Intl.NumberFormat("en-GB", {
+          style: "currency",
+          currency: "GBP"
+        }).format(updatedEstimate)
+      )
+    ).toBeInTheDocument();
   });
 });
