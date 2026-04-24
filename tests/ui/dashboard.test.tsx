@@ -2,6 +2,7 @@ import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 
 import AccountsPage from "@/app/(app)/accounts/page";
 import BillsPage from "@/app/(app)/bills/page";
+import DashboardPage from "@/app/(app)/dashboard/page";
 import GoalsPage from "@/app/(app)/goals/page";
 import PotsPage from "@/app/(app)/pots/page";
 import SalaryPage from "@/app/(app)/salary/page";
@@ -32,6 +33,16 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("button", { name: /toggle theme/i })
     ).toBeInTheDocument();
+  });
+});
+
+describe("DashboardPage", () => {
+  it("shows the key financial overview cards", () => {
+    render(<DashboardPage />);
+
+    expect(screen.getByText("Net monthly position")).toBeInTheDocument();
+    expect(screen.getByText("Upcoming bills")).toBeInTheDocument();
+    expect(screen.getByText("Savings progress")).toBeInTheDocument();
   });
 });
 
