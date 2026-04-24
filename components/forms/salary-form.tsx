@@ -18,7 +18,10 @@ export function SalaryForm() {
   });
 
   return (
-    <form className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+    <form
+      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]"
+      onSubmit={(event) => event.preventDefault()}
+    >
       <div className="space-y-4 rounded-[28px] border border-black/10 bg-white/60 p-6">
         <label className="block space-y-2">
           <span className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">

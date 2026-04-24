@@ -35,36 +35,40 @@ describe("SalaryPage", () => {
 
     const annualSalaryInput = screen.getByLabelText("Annual salary");
     const pensionInput = screen.getByLabelText("Pension percent");
+    const currencyFormatter = new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: "GBP"
+    });
     const initialEstimate = estimateUkMonthlyPay({
       annualSalary: 42_000,
       pensionPercent: 5
     }).netMonthly;
-    const updatedEstimate = estimateUkMonthlyPay({
+    const updatedSalaryEstimate = estimateUkMonthlyPay({
       annualSalary: 50_000,
       pensionPercent: 5
+    }).netMonthly;
+    const updatedPensionEstimate = estimateUkMonthlyPay({
+      annualSalary: 50_000,
+      pensionPercent: 10
     }).netMonthly;
 
     expect(annualSalaryInput).toBeInTheDocument();
     expect(pensionInput).toBeInTheDocument();
     expect(screen.getByText("Estimated monthly net pay")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        new Intl.NumberFormat("en-GB", {
-          style: "currency",
-          currency: "GBP"
-        }).format(initialEstimate)
-      )
+      screen.getByText(currencyFormatter.format(initialEstimate))
     ).toBeInTheDocument();
 
     fireEvent.change(annualSalaryInput, { target: { value: "50000" } });
 
     expect(
-      screen.getByText(
-        new Intl.NumberFormat("en-GB", {
-          style: "currency",
-          currency: "GBP"
-        }).format(updatedEstimate)
-      )
+      screen.getByText(currencyFormatter.format(updatedSalaryEstimate))
+    ).toBeInTheDocument();
+
+    fireEvent.change(pensionInput, { target: { value: "10" } });
+
+    expect(
+      screen.getByText(currencyFormatter.format(updatedPensionEstimate))
     ).toBeInTheDocument();
   });
 });
