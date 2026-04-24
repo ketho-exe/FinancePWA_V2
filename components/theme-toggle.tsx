@@ -43,6 +43,7 @@ export function ThemeToggle() {
   return (
     <button
       aria-label="Toggle theme"
+      aria-pressed={theme === "dark"}
       className="inline-flex h-11 items-center rounded-full border px-4 text-sm font-medium transition-colors"
       onClick={() => {
         setTheme(nextTheme);

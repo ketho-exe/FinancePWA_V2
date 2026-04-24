@@ -1,16 +1,27 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const navItems = [
-  { label: "Dashboard", detail: "Overview and daily pulse" },
-  { label: "Salary", detail: "Income and pay cadence" },
-  { label: "Accounts", detail: "Cash, cards, and balances" },
-  { label: "Transactions", detail: "Spending history" },
-  { label: "Bills", detail: "Recurring commitments" },
-  { label: "Pots", detail: "Short-term savings" },
-  { label: "Goals", detail: "Milestones and progress" },
-  { label: "Wishlist", detail: "Planned future spends" }
+type NavItem = {
+  label: string;
+  detail: string;
+  href: string;
+};
+
+const navItems: NavItem[] = [
+  { label: "Dashboard", detail: "Overview and daily pulse", href: "/dashboard" },
+  { label: "Salary", detail: "Income and pay cadence", href: "/salary" },
+  { label: "Accounts", detail: "Cash, cards, and balances", href: "/accounts" },
+  {
+    label: "Transactions",
+    detail: "Spending history",
+    href: "/transactions"
+  },
+  { label: "Bills", detail: "Recurring commitments", href: "/bills" },
+  { label: "Pots", detail: "Short-term savings", href: "/pots" },
+  { label: "Goals", detail: "Milestones and progress", href: "/goals" },
+  { label: "Wishlist", detail: "Planned future spends", href: "/wishlist" }
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -41,16 +52,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <nav aria-label="Primary" className="space-y-2">
             {navItems.map((item) => (
-              <div
+              <Link
                 key={item.label}
-                className="rounded-[24px] px-4 py-3 transition-colors"
+                className="block rounded-[24px] px-4 py-3 transition-colors"
+                href={item.href}
                 style={{ background: "var(--nav-item)" }}
               >
                 <div className="font-medium">{item.label}</div>
                 <div className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
                   {item.detail}
                 </div>
-              </div>
+              </Link>
             ))}
           </nav>
         </aside>
