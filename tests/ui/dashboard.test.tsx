@@ -1,6 +1,7 @@
 import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 
 import SalaryPage from "@/app/(app)/salary/page";
+import TransactionsPage from "@/app/(app)/transactions/page";
 import { AppShell } from "@/components/app-shell";
 import { estimateUkMonthlyPay } from "@/lib/salary/uk";
 
@@ -103,5 +104,15 @@ describe("SalaryPage", () => {
     expect(
       screen.getByText(currencyFormatter.format(submittedEstimate))
     ).toBeInTheDocument();
+  });
+});
+
+describe("TransactionsPage", () => {
+  it("shows account assignment and category creation controls", () => {
+    render(<TransactionsPage />);
+
+    expect(screen.getByLabelText("Account")).toBeInTheDocument();
+    expect(screen.getByLabelText("Category")).toBeInTheDocument();
+    expect(screen.getByText("Create category")).toBeInTheDocument();
   });
 });
