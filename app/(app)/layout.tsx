@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
+import { AppShell } from "@/components/app-shell";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({
@@ -15,5 +16,5 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  return <>{children}</>;
+  return <AppShell>{children}</AppShell>;
 }
