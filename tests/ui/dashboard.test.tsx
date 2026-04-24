@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 
 import SalaryPage from "@/app/(app)/salary/page";
 import { AppShell } from "@/components/app-shell";
@@ -69,6 +69,39 @@ describe("SalaryPage", () => {
 
     expect(
       screen.getByText(currencyFormatter.format(updatedPensionEstimate))
+    ).toBeInTheDocument();
+  });
+
+  it("prevents form submission and keeps the current estimate intact", () => {
+    render(<SalaryPage />);
+
+    const annualSalaryInput = screen.getByLabelText("Annual salary");
+    const pensionInput = screen.getByLabelText("Pension percent");
+    const form = annualSalaryInput.closest("form");
+    const currencyFormatter = new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: "GBP"
+    });
+    const submittedEstimate = estimateUkMonthlyPay({
+      annualSalary: 50_000,
+      pensionPercent: 10
+    }).netMonthly;
+
+    if (!form) {
+      throw new Error("Expected salary inputs to be inside a form");
+    }
+
+    fireEvent.change(annualSalaryInput, { target: { value: "50000" } });
+    fireEvent.change(pensionInput, { target: { value: "10" } });
+
+    const submitEvent = createEvent.submit(form);
+    fireEvent(form, submitEvent);
+
+    expect(submitEvent.defaultPrevented).toBe(true);
+    expect(annualSalaryInput).toHaveValue(50000);
+    expect(pensionInput).toHaveValue(10);
+    expect(
+      screen.getByText(currencyFormatter.format(submittedEstimate))
     ).toBeInTheDocument();
   });
 });
