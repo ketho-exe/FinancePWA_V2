@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 
+import SalaryPage from "@/app/(app)/salary/page";
 import { AppShell } from "@/components/app-shell";
 
 describe("AppShell", () => {
@@ -24,5 +25,14 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("button", { name: /toggle theme/i })
     ).toBeInTheDocument();
+  });
+});
+
+describe("SalaryPage", () => {
+  it("shows salary inputs and estimated take-home output", () => {
+    render(<SalaryPage />);
+
+    expect(screen.getByLabelText("Annual salary")).toBeInTheDocument();
+    expect(screen.getByText("Estimated monthly net pay")).toBeInTheDocument();
   });
 });
