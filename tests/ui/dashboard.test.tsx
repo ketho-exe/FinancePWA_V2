@@ -1,5 +1,6 @@
 import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 
+import AccountsPage from "@/app/(app)/accounts/page";
 import SalaryPage from "@/app/(app)/salary/page";
 import TransactionsPage from "@/app/(app)/transactions/page";
 import { AppShell } from "@/components/app-shell";
@@ -114,5 +115,55 @@ describe("TransactionsPage", () => {
     expect(screen.getByLabelText("Account")).toBeInTheDocument();
     expect(screen.getByLabelText("Category")).toBeInTheDocument();
     expect(screen.getByText("Create category")).toBeInTheDocument();
+  });
+
+  it("lets the user create a local category and save a draft transaction", () => {
+    render(<TransactionsPage />);
+
+    const categoryInput = screen.getByLabelText("Category");
+    const form = categoryInput.closest("form");
+
+    if (!form) {
+      throw new Error("Expected transaction controls to be inside a form");
+    }
+
+    fireEvent.change(categoryInput, { target: { value: "Travel" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create category" }));
+
+    expect(screen.getByText('Category "Travel" ready')).toBeInTheDocument();
+
+    const submitEvent = createEvent.submit(form);
+    fireEvent(form, submitEvent);
+
+    expect(submitEvent.defaultPrevented).toBe(true);
+    expect(screen.getByText("Draft transaction saved locally")).toBeInTheDocument();
+  });
+});
+
+describe("AccountsPage", () => {
+  it("shows account controls and saves the account locally", () => {
+    render(<AccountsPage />);
+
+    const accountNameInput = screen.getByLabelText("Account name");
+    const accountTypeInput = screen.getByLabelText("Account type");
+    const form = accountNameInput.closest("form");
+
+    if (!form) {
+      throw new Error("Expected account controls to be inside a form");
+    }
+
+    expect(accountNameInput).toBeInTheDocument();
+    expect(accountTypeInput).toBeInTheDocument();
+
+    fireEvent.change(accountNameInput, { target: { value: "Holiday fund" } });
+    fireEvent.change(accountTypeInput, { target: { value: "savings" } });
+
+    const submitEvent = createEvent.submit(form);
+    fireEvent(form, submitEvent);
+
+    expect(submitEvent.defaultPrevented).toBe(true);
+    expect(
+      screen.getByText("Saved Holiday fund as a savings account locally")
+    ).toBeInTheDocument();
   });
 });
