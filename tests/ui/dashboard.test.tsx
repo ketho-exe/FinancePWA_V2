@@ -3,6 +3,7 @@ import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 import AccountsPage from "@/app/(app)/accounts/page";
 import SalaryPage from "@/app/(app)/salary/page";
 import TransactionsPage from "@/app/(app)/transactions/page";
+import WishlistPage from "@/app/(app)/wishlist/page";
 import { AppShell } from "@/components/app-shell";
 import { estimateUkMonthlyPay } from "@/lib/salary/uk";
 
@@ -165,5 +166,14 @@ describe("AccountsPage", () => {
     expect(
       screen.getByText("Saved Holiday fund as a savings account locally")
     ).toBeInTheDocument();
+  });
+});
+
+describe("WishlistPage", () => {
+  it("shows wishlist tracking controls", () => {
+    render(<WishlistPage />);
+
+    expect(screen.getByLabelText("Item name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Target amount")).toBeInTheDocument();
   });
 });
