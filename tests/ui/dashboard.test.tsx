@@ -3,6 +3,7 @@ import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 import AccountsPage from "@/app/(app)/accounts/page";
 import BillsPage from "@/app/(app)/bills/page";
 import GoalsPage from "@/app/(app)/goals/page";
+import PotsPage from "@/app/(app)/pots/page";
 import SalaryPage from "@/app/(app)/salary/page";
 import TransactionsPage from "@/app/(app)/transactions/page";
 import WishlistPage from "@/app/(app)/wishlist/page";
@@ -177,6 +178,7 @@ describe("WishlistPage", () => {
 
     expect(screen.getByLabelText("Item name")).toBeInTheDocument();
     expect(screen.getByLabelText("Target amount")).toBeInTheDocument();
+    expect(screen.getByLabelText("Current saved amount")).toBeInTheDocument();
   });
 });
 
@@ -187,6 +189,7 @@ describe("GoalsPage", () => {
     expect(screen.getByLabelText("Goal name")).toBeInTheDocument();
     expect(screen.getByLabelText("Target amount")).toBeInTheDocument();
     expect(screen.getByLabelText("Target date")).toBeInTheDocument();
+    expect(screen.getByLabelText("Current saved amount")).toBeInTheDocument();
   });
 });
 
@@ -197,5 +200,42 @@ describe("BillsPage", () => {
     expect(screen.getByLabelText("Bill name")).toBeInTheDocument();
     expect(screen.getByLabelText("Cadence")).toBeInTheDocument();
     expect(screen.getByLabelText("Next due date")).toBeInTheDocument();
+  });
+
+  it("requires the next due date before saving a recurring item locally", () => {
+    render(<BillsPage />);
+
+    const billNameInput = screen.getByLabelText("Bill name");
+    const amountInput = screen.getByLabelText("Amount");
+    const cadenceInput = screen.getByLabelText("Cadence");
+    const form = billNameInput.closest("form");
+
+    if (!form) {
+      throw new Error("Expected recurring item controls to be inside a form");
+    }
+
+    fireEvent.change(billNameInput, { target: { value: "Council tax" } });
+    fireEvent.change(amountInput, { target: { value: "145" } });
+    fireEvent.change(cadenceInput, { target: { value: "monthly" } });
+
+    const submitEvent = createEvent.submit(form);
+    fireEvent(form, submitEvent);
+
+    expect(submitEvent.defaultPrevented).toBe(true);
+    expect(
+      screen.getByText(
+        "Enter a bill name, amount, and next due date to save it locally"
+      )
+    ).toBeInTheDocument();
+  });
+});
+
+describe("PotsPage", () => {
+  it("shows savings pot progress controls", () => {
+    render(<PotsPage />);
+
+    expect(screen.getByLabelText("Pot name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Target amount")).toBeInTheDocument();
+    expect(screen.getByLabelText("Current saved amount")).toBeInTheDocument();
   });
 });
