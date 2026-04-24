@@ -1,20 +1,20 @@
+import type { AccountRecord } from "@/lib/types";
+
+type SummaryAccount = Pick<AccountRecord, "kind" | "balance" | "overdraft_limit">;
+
 export interface BuildFinancialSummaryInput {
-  accounts: Array<{
-    kind: string;
-    balance: number;
-    overdraft_limit: number | null;
-  }>;
+  accounts: SummaryAccount[];
   recurringItems: Array<{ amount: number }>;
   goals: Array<{ target_amount: number; saved_amount: number }>;
 }
 
 export function buildFinancialSummary(input: BuildFinancialSummaryInput) {
   const cash = input.accounts
-    .filter((account) => account.kind !== "credit")
+    .filter((account) => account.kind !== "credit" && account.balance > 0)
     .reduce((sum, account) => sum + account.balance, 0);
 
   const debt = input.accounts
-    .filter((account) => account.kind === "credit" && account.balance < 0)
+    .filter((account) => account.balance < 0)
     .reduce((sum, account) => sum + Math.abs(account.balance), 0);
 
   const committedMonthly = input.recurringItems.reduce(
