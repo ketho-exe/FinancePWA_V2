@@ -5,6 +5,7 @@ import { useState } from "react";
 export function PotForm() {
   const [potName, setPotName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
+  const [currentAmount, setCurrentAmount] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
 
   return (
@@ -21,7 +22,7 @@ export function PotForm() {
         }
 
         setSaveStatus(
-          `Saved ${trimmedPotName} with a target of ${targetAmount} locally`
+          `Saved ${trimmedPotName} with a target of ${targetAmount} and ${currentAmount || "0"} already saved locally`
         );
       }}
     >
@@ -49,6 +50,20 @@ export function PotForm() {
           onChange={(event) => setTargetAmount(event.target.value)}
           placeholder="1200"
           value={targetAmount}
+        />
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">
+          Current saved amount
+        </span>
+        <input
+          aria-label="Current saved amount"
+          className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-lg text-[var(--fg)] outline-none"
+          inputMode="decimal"
+          onChange={(event) => setCurrentAmount(event.target.value)}
+          placeholder="300"
+          value={currentAmount}
         />
       </label>
 

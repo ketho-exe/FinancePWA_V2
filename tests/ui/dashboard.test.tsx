@@ -1,6 +1,8 @@
 import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 
 import AccountsPage from "@/app/(app)/accounts/page";
+import BillsPage from "@/app/(app)/bills/page";
+import GoalsPage from "@/app/(app)/goals/page";
 import SalaryPage from "@/app/(app)/salary/page";
 import TransactionsPage from "@/app/(app)/transactions/page";
 import WishlistPage from "@/app/(app)/wishlist/page";
@@ -175,5 +177,25 @@ describe("WishlistPage", () => {
 
     expect(screen.getByLabelText("Item name")).toBeInTheDocument();
     expect(screen.getByLabelText("Target amount")).toBeInTheDocument();
+  });
+});
+
+describe("GoalsPage", () => {
+  it("shows the core saving goal fields", () => {
+    render(<GoalsPage />);
+
+    expect(screen.getByLabelText("Goal name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Target amount")).toBeInTheDocument();
+    expect(screen.getByLabelText("Target date")).toBeInTheDocument();
+  });
+});
+
+describe("BillsPage", () => {
+  it("shows recurring item cadence and next due date controls", () => {
+    render(<BillsPage />);
+
+    expect(screen.getByLabelText("Bill name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cadence")).toBeInTheDocument();
+    expect(screen.getByLabelText("Next due date")).toBeInTheDocument();
   });
 });

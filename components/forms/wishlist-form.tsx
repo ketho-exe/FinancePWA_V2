@@ -5,6 +5,7 @@ import { useState } from "react";
 export function WishlistForm() {
   const [itemName, setItemName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
+  const [currentAmount, setCurrentAmount] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
 
   return (
@@ -21,7 +22,7 @@ export function WishlistForm() {
         }
 
         setSaveStatus(
-          `Tracking ${trimmedItemName} locally with a target of ${targetAmount}`
+          `Tracking ${trimmedItemName} locally with a target of ${targetAmount} and ${currentAmount || "0"} already saved`
         );
       }}
     >
@@ -49,6 +50,20 @@ export function WishlistForm() {
           onChange={(event) => setTargetAmount(event.target.value)}
           placeholder="399"
           value={targetAmount}
+        />
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">
+          Current saved amount
+        </span>
+        <input
+          aria-label="Current saved amount"
+          className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-lg text-[var(--fg)] outline-none"
+          inputMode="decimal"
+          onChange={(event) => setCurrentAmount(event.target.value)}
+          placeholder="120"
+          value={currentAmount}
         />
       </label>
 

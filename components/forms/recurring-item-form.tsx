@@ -5,7 +5,8 @@ import { useState } from "react";
 export function RecurringItemForm() {
   const [itemName, setItemName] = useState("");
   const [amount, setAmount] = useState("");
-  const [billingDay, setBillingDay] = useState("1");
+  const [cadence, setCadence] = useState("monthly");
+  const [nextDueDate, setNextDueDate] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
 
   return (
@@ -16,13 +17,15 @@ export function RecurringItemForm() {
 
         const trimmedItemName = itemName.trim();
 
-        if (!trimmedItemName || !amount.trim()) {
-          setSaveStatus("Enter a bill name and amount to save it locally");
+        if (!trimmedItemName || !amount.trim() || !nextDueDate) {
+          setSaveStatus(
+            "Enter a bill name, amount, and next due date to save it locally"
+          );
           return;
         }
 
         setSaveStatus(
-          `Saved ${trimmedItemName} for day ${billingDay} with a local amount of ${amount}`
+          `Saved ${trimmedItemName} as a ${cadence} recurring item due next on ${nextDueDate} with a local amount of ${amount}`
         );
       }}
     >
@@ -55,18 +58,31 @@ export function RecurringItemForm() {
 
       <label className="block space-y-2">
         <span className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">
-          Billing day
+          Cadence
         </span>
         <select
-          aria-label="Billing day"
+          aria-label="Cadence"
           className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-lg text-[var(--fg)] outline-none"
-          onChange={(event) => setBillingDay(event.target.value)}
-          value={billingDay}
+          onChange={(event) => setCadence(event.target.value)}
+          value={cadence}
         >
-          <option value="1">1st of the month</option>
-          <option value="15">15th of the month</option>
-          <option value="28">28th of the month</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
         </select>
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">
+          Next due date
+        </span>
+        <input
+          aria-label="Next due date"
+          className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-lg text-[var(--fg)] outline-none"
+          onChange={(event) => setNextDueDate(event.target.value)}
+          type="date"
+          value={nextDueDate}
+        />
       </label>
 
       <button

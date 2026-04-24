@@ -4,7 +4,9 @@ import { useState } from "react";
 
 export function GoalForm() {
   const [goalName, setGoalName] = useState("");
+  const [targetAmount, setTargetAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
+  const [currentAmount, setCurrentAmount] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
 
   return (
@@ -15,13 +17,15 @@ export function GoalForm() {
 
         const trimmedGoalName = goalName.trim();
 
-        if (!trimmedGoalName || !targetDate) {
-          setSaveStatus("Add a goal name and target date to save it locally");
+        if (!trimmedGoalName || !targetAmount.trim() || !targetDate) {
+          setSaveStatus(
+            "Add a goal name, target amount, and target date to save it locally"
+          );
           return;
         }
 
         setSaveStatus(
-          `Saved ${trimmedGoalName} with a local target date of ${targetDate}`
+          `Saved ${trimmedGoalName} with a target of ${targetAmount}, ${currentAmount || "0"} saved, and a target date of ${targetDate}`
         );
       }}
     >
@@ -40,6 +44,20 @@ export function GoalForm() {
 
       <label className="block space-y-2">
         <span className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">
+          Target amount
+        </span>
+        <input
+          aria-label="Target amount"
+          className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-lg text-[var(--fg)] outline-none"
+          inputMode="decimal"
+          onChange={(event) => setTargetAmount(event.target.value)}
+          placeholder="25000"
+          value={targetAmount}
+        />
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">
           Target date
         </span>
         <input
@@ -48,6 +66,20 @@ export function GoalForm() {
           onChange={(event) => setTargetDate(event.target.value)}
           type="date"
           value={targetDate}
+        />
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">
+          Current saved amount
+        </span>
+        <input
+          aria-label="Current saved amount"
+          className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-lg text-[var(--fg)] outline-none"
+          inputMode="decimal"
+          onChange={(event) => setCurrentAmount(event.target.value)}
+          placeholder="8500"
+          value={currentAmount}
         />
       </label>
 
