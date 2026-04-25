@@ -41,9 +41,9 @@ export default function DashboardPage() {
 
   const summaryCards: SummaryCardItem[] = [
     {
-      title: "Net monthly position",
-      value: formatSignedCurrency(netMonthlyPosition),
-      detail: "Demo cash less this month's seeded recurring spend"
+      title: "Cash after seeded bills",
+      value: formatCurrency(netMonthlyPosition),
+      detail: "Current demo cash minus the queued seeded bills below"
     },
     {
       title: "Upcoming bills",
@@ -58,10 +58,10 @@ export default function DashboardPage() {
   ];
 
   const spendingItems: SpendingChartItem[] = [
-    { category: "Housing", amount: formatCurrency(950), width: "67%" },
-    { category: "Food", amount: formatCurrency(220), width: "45%" },
-    { category: "Transport", amount: formatCurrency(145), width: "31%" },
-    { category: "Leisure", amount: formatCurrency(105), width: "24%" }
+    { category: "Housing", amount: 950 },
+    { category: "Food", amount: 220 },
+    { category: "Transport", amount: 145 },
+    { category: "Leisure", amount: 105 }
   ];
 
   return (

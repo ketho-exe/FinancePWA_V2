@@ -37,20 +37,22 @@ describe("AppShell", () => {
 });
 
 describe("DashboardPage", () => {
-  it("shows the demo dashboard overview and seeded summary data", () => {
+  it("shows the demo dashboard overview with truthful seeded dashboard semantics", () => {
     render(<DashboardPage />);
 
     expect(
       screen.getByRole("heading", { name: "Dashboard", level: 1 })
     ).toBeInTheDocument();
     expect(screen.getByText("Prototype snapshot")).toBeInTheDocument();
-    expect(screen.getByText("Net monthly position")).toBeInTheDocument();
+    expect(screen.getByText("Cash after seeded bills")).toBeInTheDocument();
     expect(screen.getByText("Upcoming bills")).toBeInTheDocument();
     expect(screen.getByText("Savings progress")).toBeInTheDocument();
     expect(screen.getByText("Spending by category")).toBeInTheDocument();
-    expect(screen.getByText("+GBP 3,580.00")).toBeInTheDocument();
+    expect(screen.getByText("GBP 3,580.00")).toBeInTheDocument();
     expect(screen.getByText("GBP 1,420.00 of demo bills queued")).toBeInTheDocument();
     expect(screen.getByText("68% of sample goals funded")).toBeInTheDocument();
+    expect(screen.getByText("Housing")).toBeInTheDocument();
+    expect(screen.getByText("67% of seeded spend")).toBeInTheDocument();
   });
 });
 

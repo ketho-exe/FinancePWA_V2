@@ -1,7 +1,6 @@
 export interface SpendingChartItem {
   category: string;
-  amount: string;
-  width: string;
+  amount: number;
 }
 
 interface SpendingChartProps {
@@ -17,6 +16,12 @@ export function SpendingChart({
   description,
   items
 }: SpendingChartProps) {
+  const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+  const currencyFormatter = new Intl.NumberFormat("en-GB", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
   return (
     <section
       className="rounded-[32px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] md:p-6"
@@ -36,12 +41,19 @@ export function SpendingChart({
       </div>
 
       <div className="mt-6 space-y-4">
-        {items.map((item) => (
+        {items.map((item) => {
+          const sharePercent =
+            totalAmount === 0 ? 0 : Math.round((item.amount / totalAmount) * 100);
+
+          return (
           <div key={item.category} className="space-y-2">
             <div className="flex items-center justify-between gap-4 text-sm">
               <span>{item.category}</span>
-              <span className="text-[var(--muted)]">{item.amount}</span>
+              <span className="text-[var(--muted)]">
+                {`GBP ${currencyFormatter.format(item.amount)}`}
+              </span>
             </div>
+            <p className="text-xs text-[var(--muted)]">{`${sharePercent}% of seeded spend`}</p>
             <div
               className="h-3 overflow-hidden rounded-full"
               style={{ background: "rgba(127, 142, 154, 0.18)" }}
@@ -49,14 +61,15 @@ export function SpendingChart({
               <div
                 className="h-full rounded-full"
                 style={{
-                  width: item.width,
+                  width: `${sharePercent}%`,
                   background:
                     "linear-gradient(90deg, rgba(214, 139, 87, 0.95), rgba(198, 110, 63, 0.78))"
                 }}
               />
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
