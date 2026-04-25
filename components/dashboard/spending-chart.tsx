@@ -1,11 +1,22 @@
-const spendingCategories = [
-  { category: "Housing", amount: "£1,050", width: "72%" },
-  { category: "Food", amount: "£420", width: "48%" },
-  { category: "Transport", amount: "£210", width: "32%" },
-  { category: "Fun", amount: "£160", width: "24%" }
-];
+export interface SpendingChartItem {
+  category: string;
+  amount: string;
+  width: string;
+}
 
-export function SpendingChart() {
+interface SpendingChartProps {
+  eyebrow: string;
+  title: string;
+  description: string;
+  items: SpendingChartItem[];
+}
+
+export function SpendingChart({
+  eyebrow,
+  title,
+  description,
+  items
+}: SpendingChartProps) {
   return (
     <section
       className="rounded-[32px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] md:p-6"
@@ -17,20 +28,15 @@ export function SpendingChart() {
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">
-            Spending snapshot
+            {eyebrow}
           </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight">
-            Spending by category
-          </h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight">{title}</h2>
         </div>
-        <p className="max-w-md text-sm text-[var(--muted)]">
-          A quick read on where the month is going so you can spot drift before
-          it becomes a surprise.
-        </p>
+        <p className="max-w-md text-sm text-[var(--muted)]">{description}</p>
       </div>
 
       <div className="mt-6 space-y-4">
-        {spendingCategories.map((item) => (
+        {items.map((item) => (
           <div key={item.category} className="space-y-2">
             <div className="flex items-center justify-between gap-4 text-sm">
               <span>{item.category}</span>
