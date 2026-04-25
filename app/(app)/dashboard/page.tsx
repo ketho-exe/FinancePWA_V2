@@ -38,6 +38,13 @@ function formatSignedCurrency(value: number) {
 export default function DashboardPage() {
   const summary = buildFinancialSummary(demoDashboardInput);
   const netMonthlyPosition = summary.cash - summary.committedMonthly;
+  const remainingGoalFunding = Math.max(
+    demoDashboardInput.goals.reduce(
+      (sum, goal) => sum + (goal.target_amount - goal.saved_amount),
+      0
+    ),
+    0
+  );
 
   const summaryCards: SummaryCardItem[] = [
     {
@@ -66,19 +73,75 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <header className="max-w-3xl space-y-3">
-        <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">
-          Prototype snapshot
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-[var(--muted)]">
-          This dashboard is currently showing seeded sample data to demonstrate
-          the summary layout while live account syncing is still out of scope
-          for this slice.
-        </p>
+      <header className="space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl space-y-3">
+            <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">
+              Prototype snapshot
+            </p>
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+              Dashboard
+            </h1>
+            <p className="text-[var(--muted)]">
+              This dashboard is showing seeded sample data so the shell,
+              summary cards, and spending views can be reviewed before
+              Supabase-backed account syncing is connected.
+            </p>
+          </div>
+
+          <div
+            className="inline-flex w-full max-w-sm items-center gap-3 rounded-full border px-4 py-3 text-sm lg:w-auto"
+            style={{
+              background: "var(--nav-item)",
+              borderColor: "var(--panel-border)"
+            }}
+          >
+            <span
+              className="inline-flex h-2.5 w-2.5 rounded-full"
+              style={{ background: "#d68b57" }}
+            />
+            Sample-mode preview with auth-aware shell navigation
+          </div>
+        </div>
       </header>
 
-      <SummaryCards cards={summaryCards} />
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+        <SummaryCards cards={summaryCards} />
+
+        <aside
+          className="rounded-[28px] border p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]"
+          style={{
+            background: "var(--nav-item)",
+            borderColor: "var(--panel-border)"
+          }}
+        >
+          <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">
+            Health check
+          </p>
+          <dl className="mt-4 space-y-4">
+            <div>
+              <dt className="text-sm text-[var(--muted)]">Monthly position</dt>
+              <dd className="mt-1 text-2xl font-semibold tracking-tight">
+                {formatSignedCurrency(netMonthlyPosition)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm text-[var(--muted)]">Goal funding left</dt>
+              <dd className="mt-1 text-2xl font-semibold tracking-tight">
+                {formatCurrency(remainingGoalFunding)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm text-[var(--muted)]">Seeded data coverage</dt>
+              <dd className="mt-1 text-sm text-[var(--muted)]">
+                Accounts, recurring bills, and savings goals are all demo values
+                for this preview slice.
+              </dd>
+            </div>
+          </dl>
+        </aside>
+      </section>
+
       <SpendingChart
         description="A prototype category split based on the same seeded monthly inputs used in the cards above."
         eyebrow="Spending snapshot"
