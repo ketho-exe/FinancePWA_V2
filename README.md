@@ -6,8 +6,16 @@ A sleek UK personal finance dashboard for tracking salary, bills, cash flow, and
 
 1. Copy `.env.example` to `.env.local`
 2. Add your Supabase project URL and publishable key
-3. Run `npm install`
-4. Run `npm run dev`
+3. In Supabase, run `supabase/schema.sql` in the SQL Editor
+4. Run `npm install`
+5. Run `npm run dev`
+
+## Auth Notes
+
+- Password auth is enabled through Supabase email + password sign-in
+- Optional email confirmation redirects back through `/auth/callback`
+- New users create a `public.profiles` row automatically through the `handle_new_user` trigger
+- Protected routes redirect unauthenticated visitors to `/login`
 
 ## Test Commands
 

@@ -18,3 +18,7 @@ export function hasSupabaseEnv() {
 
   return Boolean(url && publishableKey);
 }
+
+export function getAppUrl() {
+  return process.env.NEXT_PUBLIC_APP_URL ?? "";
+}

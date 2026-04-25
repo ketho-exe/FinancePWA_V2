@@ -27,7 +27,15 @@ const navItems: NavItem[] = [
   { label: "Wishlist", detail: "Planned future spends", href: "/wishlist" }
 ];
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  headerAction,
+  userLabel
+}: {
+  children: ReactNode;
+  headerAction?: ReactNode;
+  userLabel?: string;
+}) {
   const pathname = usePathname() ?? "";
 
   return (
@@ -96,6 +104,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             borderColor: "var(--panel-border)"
           }}
         >
+          <div className="mb-6 flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "var(--panel-border)" }}>
+            <div>
+              <p className="text-sm font-medium">Signed in as</p>
+              <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+                {userLabel ?? "Private finance workspace"}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">{headerAction}</div>
+          </div>
           {children}
         </main>
       </div>

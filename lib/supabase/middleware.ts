@@ -40,9 +40,11 @@ export async function updateSession(request: NextRequest) {
     }
   });
 
-  const { data: claims } = await supabase.auth.getClaims();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
 
-  if (!claims) {
+  if (!user) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

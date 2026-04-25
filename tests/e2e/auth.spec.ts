@@ -10,7 +10,7 @@ if (!process.env.VITEST) {
     await page.goto(`${appUrl}/dashboard`);
 
     await expect(page).toHaveURL(/login/);
-    await expect(page.getByRole("main")).toContainText("Login");
+    await expect(page.getByRole("main")).toContainText("Welcome back");
   });
 } else {
   globalThis.test?.skip?.(
